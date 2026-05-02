@@ -10,28 +10,16 @@ export async function login(
 ): Promise<{ error: string }> {
   const cookieStore = await cookies()
 
-  // Cookies nuevas seteadas durante signIn (no están en el request entrante aún)
-  const freshCookies: Record<string, string> = {}
-
   const supabase = createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
     {
       cookies: {
-        getAll() {
-          const existing = Object.fromEntries(
-            cookieStore.getAll().map(c => [c.name, c.value])
-          )
-          // freshCookies sobreescribe los existentes → el token de sesión queda disponible
-          return Object.entries({ ...existing, ...freshCookies }).map(
-            ([name, value]) => ({ name, value })
-          )
-        },
+        getAll() { return cookieStore.getAll() },
         setAll(cookiesToSet) {
-          cookiesToSet.forEach(({ name, value, options }) => {
-            freshCookies[name] = value        // disponible para getAll() inmediatamente
-            cookieStore.set(name, value, options) // persistido en la respuesta HTTP
-          })
+          cookiesToSet.forEach(({ name, value, options }) =>
+            cookieStore.set(name, value, options)
+          )
         },
       },
     }
@@ -42,16 +30,25 @@ export async function login(
     password: formData.get('password') as string,
   })
 
-  if (error || !data.user) {
+  if (error || !data.user || !data.session) {
     return { error: 'Correo o contraseña incorrectos.' }
   }
 
-  // Ahora getAll() devuelve los tokens frescos → auth.uid() funciona en RLS
-  const { data: profile } = await supabase
-    .from('profiles')
-    .select('rol')
-    .eq('id', data.user.id)
-    .single()
+  // Query directo con el access_token fresco — sin pasar por cookies ni RLS issues
+  const res = await fetch(
+    `${process.env.NEXT_PUBLIC_SUPABASE_URL}/rest/v1/profiles?id=eq.${data.user.id}&select=rol`,
+    {
+      headers: {
+        'apikey': process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+        'Authorization': `Bearer ${data.session.access_token}`,
+        'Accept': 'application/json',
+      },
+      cache: 'no-store',
+    }
+  )
 
-  redirect(profile?.rol === 'admin' ? '/admin' : '/portal')
+  const profiles = await res.json() as { rol: string }[]
+  const rol = profiles[0]?.rol
+
+  redirect(rol === 'admin' ? '/admin' : '/portal')
 }
