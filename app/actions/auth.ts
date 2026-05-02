@@ -10,16 +10,28 @@ export async function login(
 ): Promise<{ error: string }> {
   const cookieStore = await cookies()
 
+  // Cookies nuevas seteadas durante signIn (no están en el request entrante aún)
+  const freshCookies: Record<string, string> = {}
+
   const supabase = createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
     {
       cookies: {
-        getAll() { return cookieStore.getAll() },
-        setAll(cookiesToSet) {
-          cookiesToSet.forEach(({ name, value, options }) =>
-            cookieStore.set(name, value, options)
+        getAll() {
+          const existing = Object.fromEntries(
+            cookieStore.getAll().map(c => [c.name, c.value])
           )
+          // freshCookies sobreescribe los existentes → el token de sesión queda disponible
+          return Object.entries({ ...existing, ...freshCookies }).map(
+            ([name, value]) => ({ name, value })
+          )
+        },
+        setAll(cookiesToSet) {
+          cookiesToSet.forEach(({ name, value, options }) => {
+            freshCookies[name] = value        // disponible para getAll() inmediatamente
+            cookieStore.set(name, value, options) // persistido en la respuesta HTTP
+          })
         },
       },
     }
@@ -34,6 +46,7 @@ export async function login(
     return { error: 'Correo o contraseña incorrectos.' }
   }
 
+  // Ahora getAll() devuelve los tokens frescos → auth.uid() funciona en RLS
   const { data: profile } = await supabase
     .from('profiles')
     .select('rol')
