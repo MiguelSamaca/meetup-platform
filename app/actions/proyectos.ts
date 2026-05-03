@@ -2,17 +2,17 @@
 
 import { revalidatePath } from 'next/cache'
 import { redirect } from 'next/navigation'
-import { createClient } from '@/lib/supabase/server'
+import { createAdminClient } from '@/lib/supabase/admin'
 import { ETAPAS_AV_CATALOGO } from '@/lib/constants'
 
 export async function crearProyecto(formData: FormData) {
-  const supabase = await createClient()
+  const supabase = createAdminClient()
 
-  const nombre            = formData.get('nombre') as string
-  const descripcion       = formData.get('descripcion') as string
-  const cliente_id        = formData.get('cliente_id') as string
-  const estado            = formData.get('estado') as string
-  const fecha_inicio      = formData.get('fecha_inicio') as string || null
+  const nombre             = formData.get('nombre') as string
+  const descripcion        = formData.get('descripcion') as string
+  const cliente_id         = formData.get('cliente_id') as string
+  const estado             = formData.get('estado') as string
+  const fecha_inicio       = formData.get('fecha_inicio') as string || null
   const fecha_estimada_fin = formData.get('fecha_estimada_fin') as string || null
 
   const { data: proyecto, error } = await supabase
@@ -23,7 +23,6 @@ export async function crearProyecto(formData: FormData) {
 
   if (error || !proyecto) throw new Error(error?.message ?? 'Error creando proyecto')
 
-  // Insertar las 10 etapas AV automáticamente
   await supabase.from('etapas').insert(
     ETAPAS_AV_CATALOGO.map(e => ({
       proyecto_id: proyecto.id,
@@ -39,7 +38,7 @@ export async function crearProyecto(formData: FormData) {
 }
 
 export async function actualizarProyecto(id: string, formData: FormData) {
-  const supabase = await createClient()
+  const supabase = createAdminClient()
 
   const nombre             = formData.get('nombre') as string
   const descripcion        = formData.get('descripcion') as string
@@ -61,10 +60,10 @@ export async function actualizarProyecto(id: string, formData: FormData) {
 }
 
 export async function actualizarEtapa(etapaId: string, proyectoId: string, formData: FormData) {
-  const supabase = await createClient()
+  const supabase = createAdminClient()
 
-  const estado      = formData.get('estado') as string
-  const notas       = formData.get('notas') as string
+  const estado       = formData.get('estado') as string
+  const notas        = formData.get('notas') as string
   const fecha_inicio = formData.get('fecha_inicio') as string || null
   const fecha_fin    = formData.get('fecha_fin') as string || null
 
