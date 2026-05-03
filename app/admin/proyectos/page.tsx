@@ -1,5 +1,7 @@
 import { createAdminClient } from '@/lib/supabase/admin'
+import { eliminarProyecto } from '@/app/actions/proyectos'
 import Link from 'next/link'
+import DeleteButton from '@/components/admin/DeleteButton'
 import { ESTADO_PROYECTO_LABEL } from '@/lib/constants'
 
 interface SearchParams { estado?: string; q?: string }
@@ -81,7 +83,7 @@ export default async function ProyectosPage({
               <th className="text-left px-5 py-3 font-semibold text-gray-600">Cliente</th>
               <th className="text-left px-5 py-3 font-semibold text-gray-600">Estado</th>
               <th className="text-left px-5 py-3 font-semibold text-gray-600">Fecha inicio</th>
-              <th className="px-5 py-3"></th>
+              <th className="px-5 py-3" colSpan={2}></th>
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-50">
@@ -105,15 +107,20 @@ export default async function ProyectosPage({
                   {p.fecha_inicio ? new Date(p.fecha_inicio + 'T00:00:00').toLocaleDateString('es-CO') : '—'}
                 </td>
                 <td className="px-5 py-3 text-right">
-                  <Link href={`/admin/proyectos/${p.id}`} className="text-emerald-600 hover:underline text-xs font-medium">
-                    Ver →
-                  </Link>
+                  <div className="flex items-center gap-4 justify-end">
+                    <Link href={`/admin/proyectos/${p.id}`} className="text-emerald-600 hover:underline text-xs font-medium">Ver →</Link>
+                    <Link href={`/admin/proyectos/${p.id}/editar`} className="text-gray-500 hover:text-gray-700 text-xs font-medium">Editar</Link>
+                    <DeleteButton
+                      action={eliminarProyecto.bind(null, p.id)}
+                      confirm={`¿Eliminar "${p.nombre}"? Se eliminarán todas sus etapas y evidencias.`}
+                    />
+                  </div>
                 </td>
               </tr>
             ))}
             {!proyectos?.length && (
               <tr>
-                <td colSpan={5} className="px-5 py-10 text-center text-gray-400">
+                <td colSpan={6} className="px-5 py-10 text-center text-gray-400">
                   No se encontraron proyectos.
                 </td>
               </tr>

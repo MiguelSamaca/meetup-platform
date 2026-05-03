@@ -1,5 +1,7 @@
 import { createAdminClient } from '@/lib/supabase/admin'
+import { eliminarCliente } from '@/app/actions/clientes'
 import Link from 'next/link'
+import DeleteButton from '@/components/admin/DeleteButton'
 
 export default async function ClientesPage() {
   const supabase = createAdminClient()
@@ -30,6 +32,7 @@ export default async function ClientesPage() {
               <th className="text-left px-5 py-3 font-semibold text-gray-600">Correo</th>
               <th className="text-left px-5 py-3 font-semibold text-gray-600">Teléfono</th>
               <th className="text-left px-5 py-3 font-semibold text-gray-600">Estado</th>
+              <th className="px-5 py-3"></th>
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-50">
@@ -44,11 +47,25 @@ export default async function ClientesPage() {
                     {c.activo ? 'Activo' : 'Inactivo'}
                   </span>
                 </td>
+                <td className="px-5 py-3">
+                  <div className="flex items-center gap-4 justify-end">
+                    <Link
+                      href={`/admin/clientes/${c.id}/editar`}
+                      className="text-emerald-600 hover:text-emerald-800 text-sm font-medium"
+                    >
+                      Editar
+                    </Link>
+                    <DeleteButton
+                      action={eliminarCliente.bind(null, c.id)}
+                      confirm={`¿Eliminar a ${c.nombre}? Se eliminará su cuenta y todos sus datos.`}
+                    />
+                  </div>
+                </td>
               </tr>
             ))}
             {!clientes?.length && (
               <tr>
-                <td colSpan={5} className="px-5 py-10 text-center text-gray-400">
+                <td colSpan={6} className="px-5 py-10 text-center text-gray-400">
                   No hay clientes registrados.{' '}
                   <Link href="/admin/clientes/nuevo" className="text-emerald-600 hover:underline">Crear el primero</Link>
                 </td>

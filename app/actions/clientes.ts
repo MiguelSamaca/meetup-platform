@@ -3,8 +3,6 @@
 import { revalidatePath } from 'next/cache'
 import { redirect } from 'next/navigation'
 import { createAdminClient } from '@/lib/supabase/admin'
-import { createServerClient } from '@supabase/ssr'
-import { cookies } from 'next/headers'
 
 export async function crearCliente(formData: FormData) {
   const nombre   = formData.get('nombre') as string
@@ -15,7 +13,6 @@ export async function crearCliente(formData: FormData) {
 
   const admin = createAdminClient()
 
-  // Crear usuario en auth con la admin API
   const { data: authData, error: authError } = await admin.auth.admin.createUser({
     email,
     password,
@@ -27,7 +24,6 @@ export async function crearCliente(formData: FormData) {
     throw new Error(authError?.message ?? 'Error creando usuario')
   }
 
-  // Upsert del perfil (el trigger lo crea, pero aseguramos los campos extra)
   await admin.from('profiles').upsert({
     id: authData.user.id,
     nombre,
@@ -37,6 +33,41 @@ export async function crearCliente(formData: FormData) {
     rol: 'cliente',
     activo: true,
   })
+
+  revalidatePath('/admin/clientes')
+  redirect('/admin/clientes')
+}
+
+export async function editarCliente(id: string, formData: FormData) {
+  const admin = createAdminClient()
+
+  const nombre   = formData.get('nombre') as string
+  const empresa  = formData.get('empresa') as string
+  const telefono = formData.get('telefono') as string
+  const activo   = formData.get('activo') === 'true'
+
+  const { error } = await admin
+    .from('profiles')
+    .update({ nombre, empresa: empresa || null, telefono: telefono || null, activo })
+    .eq('id', id)
+
+  if (error) throw new Error(error.message)
+
+  revalidatePath('/admin/clientes')
+  redirect('/admin/clientes')
+}
+
+export async function eliminarCliente(id: string) {
+  const admin = createAdminClient()
+
+  // Nullificar referencias antes de borrar para evitar errores de FK
+  await Promise.all([
+    admin.from('proyectos').update({ cliente_id: null }).eq('cliente_id', id),
+    admin.from('tickets').update({ cliente_id: null }).eq('cliente_id', id),
+  ])
+
+  const { error } = await admin.auth.admin.deleteUser(id)
+  if (error) throw new Error(error.message)
 
   revalidatePath('/admin/clientes')
   redirect('/admin/clientes')

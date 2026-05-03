@@ -59,6 +59,14 @@ export async function actualizarProyecto(id: string, formData: FormData) {
   redirect(`/admin/proyectos/${id}`)
 }
 
+export async function eliminarProyecto(id: string) {
+  const supabase = createAdminClient()
+  const { error } = await supabase.from('proyectos').delete().eq('id', id)
+  if (error) throw new Error(error.message)
+  revalidatePath('/admin/proyectos')
+  redirect('/admin/proyectos')
+}
+
 export async function actualizarEtapa(etapaId: string, proyectoId: string, formData: FormData) {
   const supabase = createAdminClient()
 

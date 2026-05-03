@@ -40,7 +40,7 @@ create table if not exists public.proyectos (
   id                 uuid primary key default gen_random_uuid(),
   nombre             text not null,
   descripcion        text,
-  cliente_id         uuid references public.profiles(id),
+  cliente_id         uuid references public.profiles(id) on delete set null,
   estado             text default 'activo' check (estado in ('activo','pausado','completado','cancelado')),
   fecha_inicio       date,
   fecha_estimada_fin date,
@@ -66,13 +66,14 @@ create table if not exists public.etapas (
 
 -- EVIDENCIAS
 create table if not exists public.evidencias (
-  id         uuid primary key default gen_random_uuid(),
-  etapa_id   uuid references public.etapas(id) on delete cascade,
-  nombre     text not null,
-  url        text not null,
-  tipo       text,
-  subido_por uuid references public.profiles(id),
-  created_at timestamptz default now()
+  id           uuid primary key default gen_random_uuid(),
+  etapa_id     uuid references public.etapas(id) on delete cascade,
+  nombre       text not null,
+  url          text not null,
+  storage_path text,
+  tipo         text,
+  subido_por   uuid references public.profiles(id),
+  created_at   timestamptz default now()
 );
 
 -- TICKETS DE SOPORTE
@@ -80,7 +81,7 @@ create table if not exists public.tickets (
   id          uuid primary key default gen_random_uuid(),
   consecutivo text unique not null default '',
   proyecto_id uuid references public.proyectos(id),
-  cliente_id  uuid references public.profiles(id),
+  cliente_id  uuid references public.profiles(id) on delete set null,
   titulo      text not null,
   descripcion text not null,
   ubicacion   text,
@@ -94,7 +95,7 @@ create table if not exists public.tickets (
 create table if not exists public.ticket_mensajes (
   id         uuid primary key default gen_random_uuid(),
   ticket_id  uuid references public.tickets(id) on delete cascade,
-  autor_id   uuid references public.profiles(id),
+  autor_id   uuid references public.profiles(id) on delete set null,
   mensaje    text not null,
   leido      boolean default false,
   created_at timestamptz default now()

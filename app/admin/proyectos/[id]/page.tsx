@@ -1,9 +1,11 @@
 import { createAdminClient } from '@/lib/supabase/admin'
+import { eliminarProyecto } from '@/app/actions/proyectos'
 import { notFound } from 'next/navigation'
 import Link from 'next/link'
 import EtapaRow from '@/components/admin/EtapaRow'
+import DeleteButton from '@/components/admin/DeleteButton'
 import { ESTADO_PROYECTO_LABEL } from '@/lib/constants'
-import type { Etapa } from '@/lib/types'
+import type { Etapa, Evidencia } from '@/lib/types'
 
 const estadoColor: Record<string, string> = {
   activo:     'bg-emerald-100 text-emerald-700',
@@ -24,7 +26,7 @@ export default async function ProyectoDetallePage({ params }: { params: Promise<
       .single(),
     supabase
       .from('etapas')
-      .select('*')
+      .select('*, evidencias(*)')
       .eq('proyecto_id', id)
       .order('orden'),
     supabase
@@ -64,12 +66,19 @@ export default async function ProyectoDetallePage({ params }: { params: Promise<
             <p className="text-gray-500 text-sm mt-1">{proyecto.descripcion}</p>
           )}
         </div>
-        <Link
-          href={`/admin/proyectos/${id}/editar`}
-          className="border border-gray-300 text-gray-600 hover:bg-gray-50 text-sm font-medium px-4 py-2 rounded-lg transition-colors"
-        >
-          Editar
-        </Link>
+        <div className="flex items-center gap-3">
+          <Link
+            href={`/admin/proyectos/${id}/editar`}
+            className="border border-gray-300 text-gray-600 hover:bg-gray-50 text-sm font-medium px-4 py-2 rounded-lg transition-colors"
+          >
+            Editar
+          </Link>
+          <DeleteButton
+            action={eliminarProyecto.bind(null, id)}
+            label="Eliminar proyecto"
+            confirm={`¿Eliminar "${proyecto.nombre}"? Se eliminarán todas sus etapas y evidencias.`}
+          />
+        </div>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -97,7 +106,12 @@ export default async function ProyectoDetallePage({ params }: { params: Promise<
             </div>
             <ul>
               {etapas?.map(e => (
-                <EtapaRow key={e.id} etapa={e as Etapa} proyectoId={id} />
+                <EtapaRow
+                  key={e.id}
+                  etapa={e as Etapa}
+                  proyectoId={id}
+                  evidencias={(e as unknown as { evidencias: Evidencia[] }).evidencias ?? []}
+                />
               ))}
               {!etapas?.length && (
                 <li className="px-5 py-8 text-center text-gray-400 text-sm">Sin etapas registradas.</li>

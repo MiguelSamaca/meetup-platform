@@ -43,6 +43,7 @@ export interface Evidencia {
   etapa_id: string
   nombre: string
   url: string
+  storage_path: string | null
   tipo: string | null
   subido_por: string | null
   created_at: string
