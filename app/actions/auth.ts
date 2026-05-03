@@ -1,6 +1,7 @@
 'use server'
 
 import { createServerClient } from '@supabase/ssr'
+import { createAdminClient } from '@/lib/supabase/admin'
 import { cookies } from 'next/headers'
 import { redirect } from 'next/navigation'
 
@@ -30,25 +31,17 @@ export async function login(
     password: formData.get('password') as string,
   })
 
-  if (error || !data.user || !data.session) {
+  if (error || !data.user) {
     return { error: 'Correo o contraseña incorrectos.' }
   }
 
-  // Query directo con el access_token fresco — sin pasar por cookies ni RLS issues
-  const res = await fetch(
-    `${process.env.NEXT_PUBLIC_SUPABASE_URL}/rest/v1/profiles?id=eq.${data.user.id}&select=rol`,
-    {
-      headers: {
-        'apikey': process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-        'Authorization': `Bearer ${data.session.access_token}`,
-        'Accept': 'application/json',
-      },
-      cache: 'no-store',
-    }
-  )
+  // Admin client bypasea RLS — no depende de cookies ni JWT forwarding
+  const admin = createAdminClient()
+  const { data: profile } = await admin
+    .from('profiles')
+    .select('rol')
+    .eq('id', data.user.id)
+    .single()
 
-  const profiles = await res.json() as { rol: string }[]
-  const rol = profiles[0]?.rol
-
-  redirect(rol === 'admin' ? '/admin' : '/portal')
+  redirect(profile?.rol === 'admin' ? '/admin' : '/portal')
 }
