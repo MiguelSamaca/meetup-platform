@@ -1,4 +1,4 @@
-import { createClient } from '@/lib/supabase/server'
+import { createAdminClient } from '@/lib/supabase/admin'
 import { notFound } from 'next/navigation'
 import Link from 'next/link'
 import EtapaRow from '@/components/admin/EtapaRow'
@@ -14,7 +14,7 @@ const estadoColor: Record<string, string> = {
 
 export default async function ProyectoDetallePage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
-  const supabase = await createClient()
+  const supabase = createAdminClient()
 
   const [{ data: proyecto }, { data: etapas }, { data: tickets }] = await Promise.all([
     supabase

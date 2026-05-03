@@ -1,4 +1,4 @@
-import { createClient } from '@/lib/supabase/server'
+import { createAdminClient } from '@/lib/supabase/admin'
 import Link from 'next/link'
 import { ESTADO_PROYECTO_LABEL } from '@/lib/constants'
 
@@ -10,7 +10,7 @@ export default async function ProyectosPage({
   searchParams: Promise<SearchParams>
 }) {
   const { estado, q } = await searchParams
-  const supabase = await createClient()
+  const supabase = createAdminClient()
 
   let query = supabase
     .from('proyectos')

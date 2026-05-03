@@ -1,11 +1,11 @@
-import { createClient } from '@/lib/supabase/server'
+import { createAdminClient } from '@/lib/supabase/admin'
 import { actualizarProyecto } from '@/app/actions/proyectos'
 import { notFound } from 'next/navigation'
 import Link from 'next/link'
 
 export default async function EditarProyectoPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
-  const supabase = await createClient()
+  const supabase = createAdminClient()
 
   const [{ data: proyecto }, { data: clientes }] = await Promise.all([
     supabase.from('proyectos').select('*').eq('id', id).single(),

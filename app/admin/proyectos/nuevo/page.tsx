@@ -1,9 +1,9 @@
-import { createClient } from '@/lib/supabase/server'
+import { createAdminClient } from '@/lib/supabase/admin'
 import { crearProyecto } from '@/app/actions/proyectos'
 import Link from 'next/link'
 
 export default async function NuevoProyectoPage() {
-  const supabase = await createClient()
+  const supabase = createAdminClient()
   const { data: clientes } = await supabase
     .from('profiles')
     .select('id, nombre, empresa')

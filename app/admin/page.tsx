@@ -1,9 +1,9 @@
-import { createClient } from '@/lib/supabase/server'
+import { createAdminClient } from '@/lib/supabase/admin'
 import StatsCard from '@/components/admin/StatsCard'
 import Link from 'next/link'
 
 export default async function AdminDashboard() {
-  const supabase = await createClient()
+  const supabase = createAdminClient()
 
   const [
     { count: totalProyectos },
