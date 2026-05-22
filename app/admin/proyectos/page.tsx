@@ -1,4 +1,5 @@
 import { createAdminClient } from '@/lib/supabase/admin'
+import { getCurrentProfile } from '@/lib/auth'
 import { eliminarProyecto } from '@/app/actions/proyectos'
 import Link from 'next/link'
 import DeleteButton from '@/components/admin/DeleteButton'
@@ -12,11 +13,13 @@ export default async function ProyectosPage({
   searchParams: Promise<SearchParams>
 }) {
   const { estado, q } = await searchParams
+  const profile  = await getCurrentProfile()
   const supabase = createAdminClient()
 
   let query = supabase
     .from('proyectos')
     .select('id, nombre, descripcion, estado, fecha_inicio, fecha_estimada_fin, created_at, profiles(nombre, empresa)')
+    .eq('tenant_id', profile?.tenant_id!)
     .order('created_at', { ascending: false })
 
   if (estado) query = query.eq('estado', estado)

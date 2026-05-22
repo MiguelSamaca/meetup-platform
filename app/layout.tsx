@@ -13,8 +13,8 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: 'MeetUp — Portal de Clientes',
-  description: 'Seguimiento de proyectos AV y soporte técnico para clientes MeetUp Colombia.',
+  title: 'AVCore — Portal de Clientes',
+  description: 'Gestión integral de proyectos AV, soporte técnico y CRM para integradores audiovisuales.',
 };
 
 export default function RootLayout({

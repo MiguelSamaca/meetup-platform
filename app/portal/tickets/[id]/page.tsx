@@ -30,21 +30,35 @@ export default async function PortalTicketDetallePage({ params }: { params: Prom
 
   const admin = createAdminClient()
 
-  const [{ data: ticket }, { data: mensajes }] = await Promise.all([
-    admin
-      .from('tickets')
-      .select('*, proyectos(id, nombre)')
-      .eq('id', id)
-      .eq('cliente_id', user.id)
-      .single(),
-    admin
-      .from('ticket_mensajes')
-      .select('*, profiles(nombre, rol)')
-      .eq('ticket_id', id)
-      .order('created_at', { ascending: true }),
-  ])
+  // Obtener empresa_id del usuario para validar acceso
+  const { data: profile } = await admin
+    .from('profiles')
+    .select('empresa_id')
+    .eq('id', user.id)
+    .single()
 
-  if (!ticket) notFound()
+  // Buscar el ticket verificando que:
+  // - fue creado por el usuario, O
+  // - pertenece a un proyecto de su empresa
+  const { data: ticket } = await admin
+    .from('tickets')
+    .select('*, proyectos(id, nombre, empresa_id)')
+    .eq('id', id)
+    .single()
+
+  // Validar acceso: ticket propio o de proyecto de la misma empresa
+  const proyecto = ticket?.proyectos as { id: string; nombre: string; empresa_id: string } | null
+  const tieneAcceso =
+    ticket?.cliente_id === user.id ||
+    (profile?.empresa_id && proyecto?.empresa_id === profile.empresa_id)
+
+  if (!ticket || !tieneAcceso) notFound()
+
+  const { data: mensajes } = await admin
+    .from('ticket_mensajes')
+    .select('*, profiles(nombre, rol)')
+    .eq('ticket_id', id)
+    .order('created_at', { ascending: true })
 
   // Mark admin messages as read since client is viewing
   admin
@@ -54,7 +68,7 @@ export default async function PortalTicketDetallePage({ params }: { params: Prom
     .eq('leido', false)
     .then(() => {})
 
-  const proyecto = ticket.proyectos as unknown as { id: string; nombre: string } | null
+  // proyecto ya fue casteado arriba para validar acceso — reutilizamos
   const isClosed = ticket.estado === 'cerrado' || ticket.estado === 'resuelto'
 
   return (

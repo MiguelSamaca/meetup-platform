@@ -1,5 +1,8 @@
 import { createAdminClient } from '@/lib/supabase/admin'
+import { getCurrentProfile } from '@/lib/auth'
+import { eliminarTicket } from '@/app/actions/tickets'
 import Link from 'next/link'
+import DeleteButton from '@/components/admin/DeleteButton'
 import { ESTADO_TICKET_LABEL, PRIORIDAD_TICKET_LABEL } from '@/lib/constants'
 
 interface SearchParams { estado?: string; prioridad?: string; q?: string; proyecto?: string }
@@ -25,11 +28,13 @@ export default async function TicketsPage({
   searchParams: Promise<SearchParams>
 }) {
   const { estado, prioridad, q, proyecto } = await searchParams
+  const profile  = await getCurrentProfile()
   const supabase = createAdminClient()
 
   let query = supabase
     .from('tickets')
     .select('id, consecutivo, titulo, estado, prioridad, created_at, proyectos(id, nombre), profiles(nombre)')
+    .eq('tenant_id', profile?.tenant_id!)
     .order('created_at', { ascending: false })
 
   if (estado)   query = query.eq('estado', estado)
@@ -137,9 +142,15 @@ export default async function TicketsPage({
                     {new Date(t.created_at).toLocaleDateString('es-CO')}
                   </td>
                   <td className="px-5 py-3 text-right">
-                    <Link href={`/admin/tickets/${t.id}`} className="text-emerald-600 hover:underline text-xs font-medium">
-                      Ver →
-                    </Link>
+                    <div className="flex items-center gap-4 justify-end">
+                      <Link href={`/admin/tickets/${t.id}`} className="text-emerald-600 hover:underline text-xs font-medium">
+                        Ver →
+                      </Link>
+                      <DeleteButton
+                        action={eliminarTicket.bind(null, t.id)}
+                        confirm={`¿Eliminar el ticket "${t.titulo}"? Esta acción no se puede deshacer.`}
+                      />
+                    </div>
                   </td>
                 </tr>
               )

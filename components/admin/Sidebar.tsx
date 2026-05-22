@@ -4,17 +4,52 @@ import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import { useRouter } from 'next/navigation'
+import { useState, useEffect } from 'react'
 
-const nav = [
-  { href: '/admin',            label: 'Dashboard',   icon: '⊞' },
-  { href: '/admin/proyectos',  label: 'Proyectos',   icon: '◫' },
-  { href: '/admin/tickets',    label: 'Tickets',     icon: '◉' },
-  { href: '/admin/clientes',   label: 'Clientes',    icon: '◎' },
+const sections = [
+  {
+    label: 'CLIENTES',
+    items: [
+      { href: '/admin/empresas',  label: 'Empresas',   icon: '⬡' },
+      { href: '/admin/contactos', label: 'Contactos',  icon: '◈' },
+      { href: '/admin/clientes',  label: 'Usuarios',   icon: '◎' },
+    ],
+  },
+  {
+    label: 'VENTA',
+    items: [
+      { href: '/admin/proyectos',    label: 'Proyectos',    icon: '◫' },
+      { href: '/admin/cotizaciones', label: 'Cotizaciones', icon: '◑' },
+      { href: '/admin/productos',    label: 'Productos',    icon: '▦' },
+    ],
+  },
+  {
+    label: 'POST-VENTA',
+    items: [
+      { href: '/admin/tickets',   label: 'Tickets',    icon: '◉' },
+    ],
+  },
 ]
 
-export default function Sidebar() {
+const configNav = { href: '/admin/configuracion', label: 'Configuración', icon: '⚙' }
+
+export default function Sidebar({ tenantNombre, brandColor = '#059669' }: { tenantNombre?: string | null; brandColor?: string }) {
   const pathname = usePathname()
-  const router = useRouter()
+  const router   = useRouter()
+  const [collapsed, setCollapsed] = useState(false)
+
+  // Persist collapsed state
+  useEffect(() => {
+    const saved = localStorage.getItem('sidebar-collapsed')
+    if (saved === 'true') setCollapsed(true)
+  }, [])
+
+  function toggleCollapsed() {
+    setCollapsed(prev => {
+      localStorage.setItem('sidebar-collapsed', String(!prev))
+      return !prev
+    })
+  }
 
   async function signOut() {
     const supabase = createClient()
@@ -22,44 +57,108 @@ export default function Sidebar() {
     router.push('/login')
   }
 
+  function isActive(href: string) {
+    return pathname === href || pathname.startsWith(href + '/')
+  }
+
+  /** Clases + style para el estado activo con color dinámico */
+  function activeStyle(active: boolean) {
+    return active
+      ? { style: { backgroundColor: brandColor }, className: 'text-white' }
+      : { style: undefined, className: 'text-gray-400 hover:bg-gray-800 hover:text-white' }
+  }
+
   return (
-    <aside className="w-60 shrink-0 bg-gray-900 text-white flex flex-col h-screen sticky top-0">
-      {/* Logo */}
-      <div className="px-6 py-5 border-b border-gray-700">
-        <span className="text-lg font-bold tracking-tight">MeetUp</span>
-        <span className="ml-2 text-xs text-emerald-400 font-medium">Admin</span>
+    <aside
+      className={`${collapsed ? 'w-14' : 'w-60'} shrink-0 bg-gray-900 text-white flex flex-col h-screen sticky top-0 transition-all duration-200 print:hidden`}
+    >
+      {/* Logo + toggle */}
+      <div className={`flex items-center border-b border-gray-700 ${collapsed ? 'justify-center py-4 px-2' : 'px-4 py-5'}`}>
+        {!collapsed && (
+          <div className="flex-1 min-w-0">
+            <span className="text-lg font-bold tracking-tight truncate block" title={tenantNombre ?? ''}>
+              {tenantNombre ?? 'Admin'}
+            </span>
+            <span className="text-xs font-medium" style={{ color: brandColor }}>Panel de administración</span>
+          </div>
+        )}
+        <button
+          onClick={toggleCollapsed}
+          title={collapsed ? 'Expandir menú' : 'Colapsar menú'}
+          className="ml-auto flex-shrink-0 w-7 h-7 flex items-center justify-center rounded-md text-gray-400 hover:bg-gray-700 hover:text-white transition-colors text-sm"
+        >
+          {collapsed ? '›' : '‹'}
+        </button>
       </div>
 
-      {/* Nav */}
-      <nav className="flex-1 px-3 py-4 space-y-1">
-        {nav.map(item => {
-          const active = pathname === item.href ||
-            (item.href !== '/admin' && pathname.startsWith(item.href))
+      {/* Dashboard */}
+      <div className="px-2 pt-3">
+        {(() => {
+          const { style, className } = activeStyle(pathname === '/admin')
           return (
-            <Link
-              key={item.href}
-              href={item.href}
-              className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors ${
-                active
-                  ? 'bg-emerald-600 text-white'
-                  : 'text-gray-400 hover:bg-gray-800 hover:text-white'
-              }`}
+            <Link href="/admin" title="Dashboard" style={style}
+              className={`flex items-center rounded-lg text-sm font-medium transition-colors ${collapsed ? 'justify-center px-0 py-2.5' : 'gap-3 px-3 py-2.5'} ${className}`}
             >
-              <span className="text-base">{item.icon}</span>
-              {item.label}
+              <span className="text-base">⊞</span>
+              {!collapsed && 'Dashboard'}
             </Link>
           )
-        })}
+        })()}
+      </div>
+
+      {/* Secciones agrupadas */}
+      <nav className="flex-1 px-2 py-3 space-y-4 overflow-y-auto">
+        {sections.map(section => (
+          <div key={section.label}>
+            {!collapsed && (
+              <p className="px-3 mb-1 text-[10px] font-bold tracking-widest text-gray-500 uppercase">
+                {section.label}
+              </p>
+            )}
+            {collapsed && <div className="border-t border-gray-700 my-2" />}
+            <div className="space-y-0.5">
+              {section.items.map(item => {
+                const { style, className } = activeStyle(isActive(item.href))
+                return (
+                  <Link key={item.href} href={item.href} title={item.label} style={style}
+                    className={`flex items-center rounded-lg text-sm font-medium transition-colors ${collapsed ? 'justify-center px-0 py-2.5' : 'gap-3 px-3 py-2.5'} ${className}`}
+                  >
+                    <span className="text-base">{item.icon}</span>
+                    {!collapsed && item.label}
+                  </Link>
+                )
+              })}
+            </div>
+          </div>
+        ))}
       </nav>
 
+      {/* Configuración */}
+      <div className="px-2 pb-2">
+        {(() => {
+          const { style, className } = activeStyle(isActive(configNav.href))
+          return (
+            <Link href={configNav.href} title={configNav.label} style={style}
+              className={`flex items-center rounded-lg text-sm font-medium transition-colors ${collapsed ? 'justify-center px-0 py-2.5' : 'gap-3 px-3 py-2.5'} ${className}`}
+            >
+              <span className="text-base">{configNav.icon}</span>
+              {!collapsed && configNav.label}
+            </Link>
+          )
+        })()}
+      </div>
+
       {/* Sign out */}
-      <div className="px-3 py-4 border-t border-gray-700">
+      <div className="px-2 py-4 border-t border-gray-700">
         <button
           onClick={signOut}
-          className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium text-gray-400 hover:bg-gray-800 hover:text-white transition-colors"
+          title="Cerrar sesión"
+          className={`w-full flex items-center rounded-lg text-sm font-medium text-gray-400 hover:bg-gray-800 hover:text-white transition-colors ${
+            collapsed ? 'justify-center px-0 py-2.5' : 'gap-3 px-3 py-2.5'
+          }`}
         >
           <span className="text-base">⇤</span>
-          Cerrar sesión
+          {!collapsed && 'Cerrar sesión'}
         </button>
       </div>
     </aside>

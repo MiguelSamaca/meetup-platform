@@ -1,17 +1,12 @@
 import { redirect } from 'next/navigation'
-import { createClient } from '@/lib/supabase/server'
+import { getCurrentProfile } from '@/lib/auth'
 
 export default async function AuthRedirectPage() {
-  const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
+  const profile = await getCurrentProfile()
 
-  if (!user) redirect('/login')
+  if (!profile) redirect('/login')
 
-  const { data: profile } = await supabase
-    .from('profiles')
-    .select('rol')
-    .eq('id', user.id)
-    .single()
-
-  redirect(profile?.rol === 'admin' ? '/admin' : '/portal')
+  if (profile.rol === 'superadmin') redirect('/superadmin')
+  if (profile.rol === 'admin')      redirect('/admin')
+  redirect('/portal')
 }

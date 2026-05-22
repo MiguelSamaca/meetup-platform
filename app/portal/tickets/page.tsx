@@ -23,16 +23,52 @@ export default async function PortalTicketsPage() {
   const { data: { user } } = await supabase.auth.getUser()
 
   const admin = createAdminClient()
-  const { data: tickets } = await admin
-    .from('tickets')
-    .select('id, consecutivo, titulo, estado, prioridad, created_at, proyectos(nombre)')
-    .eq('cliente_id', user!.id)
-    .order('created_at', { ascending: false })
+
+  // Obtener empresa_id del usuario
+  const { data: profile } = await admin
+    .from('profiles')
+    .select('empresa_id')
+    .eq('id', user!.id)
+    .single()
+
+  // Tickets propios del usuario + tickets de proyectos de su empresa
+  let tickets: any[] = []
+
+  if (profile?.empresa_id) {
+    // Obtener IDs de proyectos de la empresa
+    const { data: proyectosEmpresa } = await admin
+      .from('proyectos')
+      .select('id')
+      .eq('empresa_id', profile.empresa_id)
+
+    const proyectoIds = proyectosEmpresa?.map(p => p.id) ?? []
+
+    const { data } = await admin
+      .from('tickets')
+      .select('id, consecutivo, titulo, estado, prioridad, cliente_id, created_at, proyectos(nombre)')
+      .or(
+        proyectoIds.length > 0
+          ? `cliente_id.eq.${user!.id},proyecto_id.in.(${proyectoIds.join(',')})`
+          : `cliente_id.eq.${user!.id}`
+      )
+      .order('created_at', { ascending: false })
+
+    tickets = data ?? []
+  } else {
+    // Sin empresa asignada: solo ve sus propios tickets
+    const { data } = await admin
+      .from('tickets')
+      .select('id, consecutivo, titulo, estado, prioridad, cliente_id, created_at, proyectos(nombre)')
+      .eq('cliente_id', user!.id)
+      .order('created_at', { ascending: false })
+
+    tickets = data ?? []
+  }
 
   return (
     <div>
       <div className="flex items-center justify-between mb-6">
-        <h1 className="text-2xl font-bold text-gray-900">Mis tickets de soporte</h1>
+        <h1 className="text-2xl font-bold text-gray-900">Tickets de soporte</h1>
         <Link
           href="/portal/tickets/nuevo"
           className="bg-emerald-500 hover:bg-emerald-600 text-white text-sm font-semibold px-4 py-2 rounded-lg transition-colors"
@@ -41,7 +77,7 @@ export default async function PortalTicketsPage() {
         </Link>
       </div>
 
-      {tickets && tickets.length > 0 ? (
+      {tickets.length > 0 ? (
         <div className="bg-white rounded-2xl border border-gray-200 overflow-hidden">
           <table className="w-full text-sm">
             <thead className="bg-gray-50 border-b border-gray-200">
@@ -57,7 +93,7 @@ export default async function PortalTicketsPage() {
             </thead>
             <tbody className="divide-y divide-gray-50">
               {tickets.map(t => {
-                const proyecto = t.proyectos as unknown as { nombre: string } | null
+                const proyecto = t.proyectos as { nombre: string } | null
                 return (
                   <tr key={t.id} className="hover:bg-gray-50 transition-colors">
                     <td className="px-5 py-3 font-mono text-xs text-gray-500">{t.consecutivo}</td>
@@ -89,7 +125,7 @@ export default async function PortalTicketsPage() {
         </div>
       ) : (
         <div className="bg-white rounded-2xl border border-gray-200 p-12 text-center">
-          <p className="text-gray-400 text-sm">No tienes tickets abiertos.</p>
+          <p className="text-gray-400 text-sm">No hay tickets de soporte abiertos.</p>
           <Link
             href="/portal/tickets/nuevo"
             className="inline-block mt-4 text-sm text-emerald-600 hover:underline font-medium"

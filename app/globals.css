@@ -3,6 +3,30 @@
 :root {
   --background: #ffffff;
   --foreground: #171717;
+  /* Color de marca del integrador — sobrescrito por el layout de admin */
+  --brand: #059669;
+  --brand-light: #05966922;
+}
+
+/* ── Botones primarios con color de marca ── */
+.btn-brand {
+  background-color: var(--brand) !important;
+  color: #ffffff !important;
+}
+.btn-brand:hover {
+  filter: brightness(0.9);
+}
+
+/* ── Anillos de foco con color de marca ── */
+.ring-brand:focus {
+  outline: none;
+  box-shadow: 0 0 0 2px var(--brand);
+}
+
+/* ── Badge activo / estado ── */
+.badge-brand {
+  background-color: var(--brand-light) !important;
+  color: var(--brand) !important;
 }
 
 @theme inline {

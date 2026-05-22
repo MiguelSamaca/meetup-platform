@@ -1,17 +1,18 @@
 import { createAdminClient } from '@/lib/supabase/admin'
+import { getCurrentProfile } from '@/lib/auth'
 import { editarCliente } from '@/app/actions/clientes'
 import { notFound } from 'next/navigation'
 import Link from 'next/link'
 
 export default async function EditarClientePage({ params }: { params: Promise<{ id: string }> }) {
-  const { id } = await params
+  const { id }   = await params
+  const profile  = await getCurrentProfile()
   const supabase = createAdminClient()
 
-  const { data: cliente } = await supabase
-    .from('profiles')
-    .select('*')
-    .eq('id', id)
-    .single()
+  const [{ data: cliente }, { data: empresas }] = await Promise.all([
+    supabase.from('profiles').select('*').eq('id', id).eq('tenant_id', profile?.tenant_id!).single(),
+    supabase.from('empresas').select('id, nombre').eq('tenant_id', profile?.tenant_id!).eq('activo', true).order('nombre'),
+  ])
 
   if (!cliente) notFound()
 
@@ -27,6 +28,22 @@ export default async function EditarClientePage({ params }: { params: Promise<{ 
 
       <div className="bg-white rounded-xl border border-gray-200 p-6">
         <form action={action} className="space-y-5">
+          {/* Empresa — obligatorio */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Empresa *</label>
+            <select
+              name="empresa_id"
+              required
+              defaultValue={cliente.empresa_id ?? ''}
+              className="w-full px-4 py-2.5 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
+            >
+              <option value="">Selecciona una empresa</option>
+              {empresas?.map(e => (
+                <option key={e.id} value={e.id}>{e.nombre}</option>
+              ))}
+            </select>
+          </div>
+
           <div className="grid grid-cols-2 gap-4">
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Nombre completo *</label>
@@ -38,10 +55,10 @@ export default async function EditarClientePage({ params }: { params: Promise<{ 
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Empresa</label>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Teléfono</label>
               <input
-                name="empresa"
-                defaultValue={cliente.empresa ?? ''}
+                name="telefono"
+                defaultValue={cliente.telefono ?? ''}
                 className="w-full px-4 py-2.5 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
               />
             </div>
@@ -58,25 +75,16 @@ export default async function EditarClientePage({ params }: { params: Promise<{ 
               <p className="text-xs text-gray-400 mt-1">El correo no se puede cambiar.</p>
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Teléfono</label>
-              <input
-                name="telefono"
-                defaultValue={cliente.telefono ?? ''}
+              <label className="block text-sm font-medium text-gray-700 mb-1">Estado</label>
+              <select
+                name="activo"
+                defaultValue={cliente.activo ? 'true' : 'false'}
                 className="w-full px-4 py-2.5 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
-              />
+              >
+                <option value="true">Activo</option>
+                <option value="false">Inactivo</option>
+              </select>
             </div>
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Estado</label>
-            <select
-              name="activo"
-              defaultValue={cliente.activo ? 'true' : 'false'}
-              className="w-full px-4 py-2.5 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
-            >
-              <option value="true">Activo</option>
-              <option value="false">Inactivo</option>
-            </select>
           </div>
 
           <div className="flex gap-3 pt-2">

@@ -43,5 +43,7 @@ export async function login(
     .eq('id', data.user.id)
     .single()
 
-  redirect(profile?.rol === 'admin' ? '/admin' : '/portal')
+  if (profile?.rol === 'superadmin') redirect('/superadmin')
+  if (profile?.rol === 'admin')      redirect('/admin')
+  redirect('/portal')
 }

@@ -1,14 +1,17 @@
 import { createAdminClient } from '@/lib/supabase/admin'
+import { getCurrentProfile } from '@/lib/auth'
 import { eliminarCliente } from '@/app/actions/clientes'
 import Link from 'next/link'
 import DeleteButton from '@/components/admin/DeleteButton'
 
 export default async function ClientesPage() {
+  const profile  = await getCurrentProfile()
   const supabase = createAdminClient()
   const { data: clientes } = await supabase
     .from('profiles')
     .select('id, nombre, email, empresa, telefono, activo, created_at')
     .eq('rol', 'cliente')
+    .eq('tenant_id', profile?.tenant_id!)
     .order('created_at', { ascending: false })
 
   return (

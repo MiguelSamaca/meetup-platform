@@ -24,7 +24,7 @@ export default function PortalNav({ nombre }: { nombre: string }) {
       <div className="max-w-5xl mx-auto px-6 h-14 flex items-center justify-between">
         <div className="flex items-center gap-8">
           <span className="font-bold text-gray-900">
-            MeetUp <span className="text-emerald-500 font-medium text-sm">Portal</span>
+            AVCore <span className="text-emerald-500 font-medium text-sm">Portal</span>
           </span>
           <nav className="flex items-center gap-6">
             <Link href="/portal" className={linkClass('/portal')}>Mis proyectos</Link>

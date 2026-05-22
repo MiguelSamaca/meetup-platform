@@ -40,12 +40,21 @@ export default async function PortalProyectoPage({ params }: { params: Promise<{
 
   const admin = createAdminClient()
 
+  // Obtener empresa_id del usuario para verificar acceso
+  const { data: profile } = await admin
+    .from('profiles')
+    .select('empresa_id')
+    .eq('id', user.id)
+    .single()
+
+  if (!profile?.empresa_id) notFound()
+
   const [{ data: proyecto }, { data: etapas }] = await Promise.all([
     admin
       .from('proyectos')
       .select('id, nombre, descripcion, estado, fecha_inicio, fecha_estimada_fin')
       .eq('id', id)
-      .eq('cliente_id', user.id)
+      .eq('empresa_id', profile.empresa_id)   // acceso restringido a la empresa del usuario
       .single(),
     admin
       .from('etapas')

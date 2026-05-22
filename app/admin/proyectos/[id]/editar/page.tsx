@@ -1,20 +1,26 @@
 import { createAdminClient } from '@/lib/supabase/admin'
+import { getCurrentProfile } from '@/lib/auth'
 import { actualizarProyecto } from '@/app/actions/proyectos'
 import { notFound } from 'next/navigation'
 import Link from 'next/link'
 
 export default async function EditarProyectoPage({ params }: { params: Promise<{ id: string }> }) {
-  const { id } = await params
+  const { id }   = await params
+  const profile  = await getCurrentProfile()
   const supabase = createAdminClient()
 
-  const [{ data: proyecto }, { data: clientes }] = await Promise.all([
-    supabase.from('proyectos').select('*').eq('id', id).single(),
-    supabase.from('profiles').select('id, nombre, empresa').eq('rol', 'cliente').eq('activo', true).order('nombre'),
+  const [{ data: proyecto }, { data: empresas }, { data: clientes }] = await Promise.all([
+    supabase.from('proyectos').select('*').eq('id', id).eq('tenant_id', profile?.tenant_id!).single(),
+    supabase.from('empresas').select('id, nombre').eq('tenant_id', profile?.tenant_id!).eq('activo', true).order('nombre'),
+    supabase.from('profiles').select('id, nombre, empresa_id').eq('tenant_id', profile?.tenant_id!).eq('rol', 'cliente').eq('activo', true).order('nombre'),
   ])
 
   if (!proyecto) notFound()
 
   const action = actualizarProyecto.bind(null, id)
+
+  // Filtrar clientes de la empresa seleccionada
+  const clientesDeEmpresa = clientes?.filter(c => c.empresa_id === proyecto.empresa_id) ?? []
 
   return (
     <div className="max-w-2xl">
@@ -26,6 +32,22 @@ export default async function EditarProyectoPage({ params }: { params: Promise<{
 
       <div className="bg-white rounded-xl border border-gray-200 p-6">
         <form action={action} className="space-y-5">
+          {/* Empresa — obligatorio */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Empresa *</label>
+            <select
+              name="empresa_id"
+              required
+              defaultValue={proyecto.empresa_id ?? ''}
+              className="w-full px-4 py-2.5 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
+            >
+              <option value="">Selecciona una empresa</option>
+              {empresas?.map(e => (
+                <option key={e.id} value={e.id}>{e.nombre}</option>
+              ))}
+            </select>
+          </div>
+
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Nombre del proyecto *</label>
             <input
@@ -46,19 +68,26 @@ export default async function EditarProyectoPage({ params }: { params: Promise<{
             />
           </div>
 
+          {/* Contacto principal (opcional, filtrado por empresa) */}
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Cliente</label>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Contacto principal</label>
             <select
               name="cliente_id"
               defaultValue={proyecto.cliente_id ?? ''}
               className="w-full px-4 py-2.5 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
             >
               <option value="">Sin asignar</option>
-              {clientes?.map(c => (
-                <option key={c.id} value={c.id}>
-                  {c.nombre}{c.empresa ? ` — ${c.empresa}` : ''}
-                </option>
+              {clientesDeEmpresa.map(c => (
+                <option key={c.id} value={c.id}>{c.nombre}</option>
               ))}
+              {/* Si hay un cliente asignado de otra empresa, mostrarlo para no perder datos */}
+              {proyecto.cliente_id &&
+                !clientesDeEmpresa.find(c => c.id === proyecto.cliente_id) &&
+                clientes?.find(c => c.id === proyecto.cliente_id) && (
+                  <option value={proyecto.cliente_id}>
+                    {clientes?.find(c => c.id === proyecto.cliente_id)?.nombre} (otra empresa)
+                  </option>
+                )}
             </select>
           </div>
 

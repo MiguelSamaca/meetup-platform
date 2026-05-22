@@ -8,12 +8,23 @@ export default async function NuevoTicketPage() {
   const { data: { user } } = await supabase.auth.getUser()
 
   const admin = createAdminClient()
-  const { data: proyectos } = await admin
-    .from('proyectos')
-    .select('id, nombre')
-    .eq('cliente_id', user!.id)
-    .eq('estado', 'activo')
-    .order('nombre')
+
+  // Obtener empresa_id del usuario
+  const { data: profile } = await admin
+    .from('profiles')
+    .select('empresa_id')
+    .eq('id', user!.id)
+    .single()
+
+  // Cargar proyectos de la empresa (no solo del usuario individual)
+  const { data: proyectos } = profile?.empresa_id
+    ? await admin
+        .from('proyectos')
+        .select('id, nombre')
+        .eq('empresa_id', profile.empresa_id)
+        .eq('estado', 'activo')
+        .order('nombre')
+    : { data: [] }
 
   return (
     <div className="max-w-2xl">

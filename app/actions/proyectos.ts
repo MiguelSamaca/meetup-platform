@@ -3,21 +3,38 @@
 import { revalidatePath } from 'next/cache'
 import { redirect } from 'next/navigation'
 import { createAdminClient } from '@/lib/supabase/admin'
+import { getCurrentProfile } from '@/lib/auth'
 import { ETAPAS_AV_CATALOGO } from '@/lib/constants'
 
-export async function crearProyecto(formData: FormData) {
-  const supabase = createAdminClient()
+async function requireAdmin() {
+  const profile = await getCurrentProfile()
+  if (!profile || profile.rol !== 'admin' || !profile.tenant_id) {
+    throw new Error('No autorizado')
+  }
+  return profile
+}
 
+export async function crearProyecto(formData: FormData) {
+  const profile            = await requireAdmin()
+  const supabase           = createAdminClient()
   const nombre             = formData.get('nombre') as string
   const descripcion        = formData.get('descripcion') as string
+  const empresa_id         = formData.get('empresa_id') as string
   const cliente_id         = formData.get('cliente_id') as string
   const estado             = formData.get('estado') as string
   const fecha_inicio       = formData.get('fecha_inicio') as string || null
   const fecha_estimada_fin = formData.get('fecha_estimada_fin') as string || null
 
+  if (!empresa_id) throw new Error('Debes seleccionar una empresa para el proyecto')
+
   const { data: proyecto, error } = await supabase
     .from('proyectos')
-    .insert({ nombre, descripcion, cliente_id: cliente_id || null, estado, fecha_inicio, fecha_estimada_fin })
+    .insert({
+      nombre, descripcion, empresa_id,
+      cliente_id: cliente_id || null,
+      estado, fecha_inicio, fecha_estimada_fin,
+      tenant_id: profile.tenant_id,
+    })
     .select('id')
     .single()
 
@@ -38,19 +55,28 @@ export async function crearProyecto(formData: FormData) {
 }
 
 export async function actualizarProyecto(id: string, formData: FormData) {
-  const supabase = createAdminClient()
-
+  const profile            = await requireAdmin()
+  const supabase           = createAdminClient()
   const nombre             = formData.get('nombre') as string
   const descripcion        = formData.get('descripcion') as string
+  const empresa_id         = formData.get('empresa_id') as string
   const cliente_id         = formData.get('cliente_id') as string
   const estado             = formData.get('estado') as string
   const fecha_inicio       = formData.get('fecha_inicio') as string || null
   const fecha_estimada_fin = formData.get('fecha_estimada_fin') as string || null
 
+  if (!empresa_id) throw new Error('Debes seleccionar una empresa para el proyecto')
+
   const { error } = await supabase
     .from('proyectos')
-    .update({ nombre, descripcion, cliente_id: cliente_id || null, estado, fecha_inicio, fecha_estimada_fin, updated_at: new Date().toISOString() })
+    .update({
+      nombre, descripcion, empresa_id,
+      cliente_id: cliente_id || null,
+      estado, fecha_inicio, fecha_estimada_fin,
+      updated_at: new Date().toISOString(),
+    })
     .eq('id', id)
+    .eq('tenant_id', profile.tenant_id!)  // solo edita sus propios proyectos
 
   if (error) throw new Error(error.message)
 
@@ -60,16 +86,20 @@ export async function actualizarProyecto(id: string, formData: FormData) {
 }
 
 export async function eliminarProyecto(id: string) {
+  const profile  = await requireAdmin()
   const supabase = createAdminClient()
-  const { error } = await supabase.from('proyectos').delete().eq('id', id)
+  const { error } = await supabase
+    .from('proyectos')
+    .delete()
+    .eq('id', id)
+    .eq('tenant_id', profile.tenant_id!)
   if (error) throw new Error(error.message)
   revalidatePath('/admin/proyectos')
   redirect('/admin/proyectos')
 }
 
 export async function actualizarEtapa(etapaId: string, proyectoId: string, formData: FormData) {
-  const supabase = createAdminClient()
-
+  const supabase     = createAdminClient()
   const estado       = formData.get('estado') as string
   const notas        = formData.get('notas') as string
   const fecha_inicio = formData.get('fecha_inicio') as string || null

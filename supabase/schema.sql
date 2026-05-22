@@ -1,5 +1,5 @@
 -- ============================================================
--- MEETUP PLATFORM — SCHEMA COMPLETO
+-- AVCORE PLATFORM — SCHEMA COMPLETO
 -- Ejecutar en Supabase Dashboard → SQL Editor
 -- ============================================================
 

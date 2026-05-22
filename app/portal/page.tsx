@@ -15,10 +15,32 @@ export default async function PortalPage() {
   const { data: { user } } = await supabase.auth.getUser()
 
   const admin = createAdminClient()
+
+  // Obtener el perfil con empresa_id
+  const { data: profile } = await admin
+    .from('profiles')
+    .select('empresa_id')
+    .eq('id', user!.id)
+    .single()
+
+  // Si el usuario no tiene empresa asignada, mostrar mensaje
+  if (!profile?.empresa_id) {
+    return (
+      <div>
+        <h1 className="text-2xl font-bold text-gray-900 mb-6">Mis proyectos</h1>
+        <div className="bg-white rounded-2xl border border-gray-200 p-12 text-center">
+          <p className="text-gray-400 text-sm">No tienes una empresa asignada aún.</p>
+          <p className="text-gray-400 text-sm mt-1">Contacta con tu asesor para más información.</p>
+        </div>
+      </div>
+    )
+  }
+
+  // Proyectos de la empresa del usuario (todos los de la empresa, no solo los asignados)
   const { data: proyectos } = await admin
     .from('proyectos')
     .select('id, nombre, descripcion, estado, fecha_estimada_fin, etapas(estado)')
-    .eq('cliente_id', user!.id)
+    .eq('empresa_id', profile.empresa_id)
     .order('created_at', { ascending: false })
 
   return (

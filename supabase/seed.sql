@@ -9,10 +9,10 @@
 insert into public.profiles (id, nombre, email, rol, empresa, activo)
 values (
   '00000000-0000-0000-0000-000000000001',
-  'Admin MeetUp',
-  'admin@meetupco.com',
+  'Admin AVCore',
+  'admin@avcore.app',
   'admin',
-  'MeetUp Colombia',
+  'AVCore Platform',
   true
 ) on conflict (id) do nothing;
 

@@ -1,11 +1,35 @@
-export type Rol = 'admin' | 'cliente'
+export type Rol = 'superadmin' | 'admin' | 'cliente'
+
+export interface Tenant {
+  id: string
+  nombre: string
+  slug: string | null
+  plan: 'basico' | 'profesional' | 'enterprise'
+  activo: boolean
+  created_at: string
+  updated_at: string
+}
+
+export interface Empresa {
+  id: string
+  nombre: string
+  nit: string | null
+  telefono: string | null
+  direccion: string | null
+  tenant_id: string
+  activo: boolean
+  created_at: string
+  updated_at: string
+}
 
 export interface Profile {
   id: string
   nombre: string
   email: string
   rol: Rol
-  empresa: string | null
+  empresa: string | null      // campo texto legado
+  empresa_id: string | null   // FK a empresas (clientes)
+  tenant_id: string | null    // FK a tenants (admins y clientes, null = superadmin)
   telefono: string | null
   activo: boolean
   created_at: string
@@ -16,6 +40,8 @@ export interface Proyecto {
   nombre: string
   descripcion: string | null
   cliente_id: string | null
+  empresa_id: string
+  tenant_id: string
   estado: 'activo' | 'pausado' | 'completado' | 'cancelado'
   fecha_inicio: string | null
   fecha_estimada_fin: string | null
@@ -54,6 +80,7 @@ export interface Ticket {
   consecutivo: string
   proyecto_id: string | null
   cliente_id: string | null
+  tenant_id: string
   titulo: string
   descripcion: string
   ubicacion: string | null
