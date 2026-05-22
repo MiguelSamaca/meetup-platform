@@ -126,7 +126,8 @@ export async function agregarMensajeCliente(ticketId: string, formData: FormData
     .eq('id', ticketId)
     .single()
 
-  const proyectoEmpresaId = (ticket?.proyectos as { empresa_id: string } | null)?.empresa_id
+  const proyectoRaw       = ticket?.proyectos
+  const proyectoEmpresaId = (Array.isArray(proyectoRaw) ? proyectoRaw[0] : proyectoRaw as { empresa_id: string } | null)?.empresa_id
   const esTicketPropio    = ticket?.cliente_id === user.id
   const esDesuEmpresa     = profile?.tenant_id && ticket?.tenant_id === profile.tenant_id
 
