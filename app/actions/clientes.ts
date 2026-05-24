@@ -4,6 +4,7 @@ import { revalidatePath } from 'next/cache'
 import { redirect } from 'next/navigation'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { getCurrentProfile } from '@/lib/auth'
+import { logAudit } from '@/lib/audit'
 
 async function requireAdmin() {
   const profile = await getCurrentProfile()
@@ -56,6 +57,16 @@ export async function crearCliente(formData: FormData) {
     activo: true,
   })
 
+  await logAudit({
+    tenantId:   profile.tenant_id,
+    userId:     profile.id,
+    userNombre: profile.nombre,
+    accion:     'crear_cliente',
+    entidad:    'cliente',
+    entidadId:  authData.user.id,
+    detalles:   { nombre, email, empresa: empresa.nombre },
+  })
+
   revalidatePath('/admin/clientes')
   redirect('/admin/clientes')
 }
@@ -86,6 +97,16 @@ export async function editarCliente(id: string, formData: FormData) {
     .eq('tenant_id', profile.tenant_id!)
 
   if (error) throw new Error(error.message)
+
+  await logAudit({
+    tenantId:   profile.tenant_id,
+    userId:     profile.id,
+    userNombre: profile.nombre,
+    accion:     'editar_cliente',
+    entidad:    'cliente',
+    entidadId:  id,
+    detalles:   { nombre, empresa: empresa.nombre, activo },
+  })
 
   revalidatePath('/admin/clientes')
   redirect('/admin/clientes')

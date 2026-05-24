@@ -4,6 +4,7 @@ import { revalidatePath } from 'next/cache'
 import { redirect } from 'next/navigation'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { getCurrentProfile } from '@/lib/auth'
+import { logAudit } from '@/lib/audit'
 
 async function requireAdmin() {
   const profile = await getCurrentProfile()
@@ -30,6 +31,15 @@ export async function crearEmpresa(formData: FormData) {
 
   if (error) throw new Error(error.message)
 
+  await logAudit({
+    tenantId:   profile.tenant_id,
+    userId:     profile.id,
+    userNombre: profile.nombre,
+    accion:     'crear_empresa',
+    entidad:    'empresa',
+    detalles:   { nombre: nombre.trim(), nit },
+  })
+
   revalidatePath('/admin/empresas')
   redirect('/admin/empresas')
 }
@@ -53,6 +63,16 @@ export async function editarEmpresa(id: string, formData: FormData) {
     .eq('tenant_id', profile.tenant_id!)  // garantiza que solo edita sus empresas
 
   if (error) throw new Error(error.message)
+
+  await logAudit({
+    tenantId:   profile.tenant_id,
+    userId:     profile.id,
+    userNombre: profile.nombre,
+    accion:     'editar_empresa',
+    entidad:    'empresa',
+    entidadId:  id,
+    detalles:   { nombre: nombre.trim(), activo },
+  })
 
   revalidatePath('/admin/empresas')
   redirect('/admin/empresas')

@@ -5,6 +5,7 @@ import { redirect } from 'next/navigation'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { getCurrentProfile } from '@/lib/auth'
 import { ETAPAS_AV_CATALOGO } from '@/lib/constants'
+import { logAudit } from '@/lib/audit'
 
 async function requireAdmin() {
   const profile = await getCurrentProfile()
@@ -50,6 +51,16 @@ export async function crearProyecto(formData: FormData) {
     }))
   )
 
+  await logAudit({
+    tenantId:   profile.tenant_id,
+    userId:     profile.id,
+    userNombre: profile.nombre,
+    accion:     'crear_proyecto',
+    entidad:    'proyecto',
+    entidadId:  proyecto.id,
+    detalles:   { nombre, estado, empresa_id },
+  })
+
   revalidatePath('/admin/proyectos')
   redirect(`/admin/proyectos/${proyecto.id}`)
 }
@@ -79,6 +90,16 @@ export async function actualizarProyecto(id: string, formData: FormData) {
     .eq('tenant_id', profile.tenant_id!)  // solo edita sus propios proyectos
 
   if (error) throw new Error(error.message)
+
+  await logAudit({
+    tenantId:   profile.tenant_id,
+    userId:     profile.id,
+    userNombre: profile.nombre,
+    accion:     'editar_proyecto',
+    entidad:    'proyecto',
+    entidadId:  id,
+    detalles:   { nombre, estado },
+  })
 
   revalidatePath(`/admin/proyectos/${id}`)
   revalidatePath('/admin/proyectos')
