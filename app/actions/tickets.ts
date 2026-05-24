@@ -5,6 +5,7 @@ import { redirect } from 'next/navigation'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { createClient } from '@/lib/supabase/server'
 import { getCurrentProfile } from '@/lib/auth'
+import { logAudit } from '@/lib/audit'
 
 export async function eliminarTicket(id: string) {
   const profile = await getCurrentProfile()
@@ -105,6 +106,16 @@ export async function crearTicket(formData: FormData) {
 
   if (error || !ticket) throw new Error(error?.message ?? 'Error creando ticket')
 
+  await logAudit({
+    tenantId:   profile.tenant_id,
+    userId:     user.id,
+    userNombre: profile.nombre,
+    accion:     'crear_ticket',
+    entidad:    'ticket',
+    entidadId:  ticket.id,
+    detalles:   { titulo, prioridad, proyecto_id },
+  })
+
   revalidatePath('/portal/tickets')
   redirect(`/portal/tickets/${ticket.id}`)
 }
@@ -143,8 +154,16 @@ export async function agregarMensajeCliente(ticketId: string, formData: FormData
 
   if (error) throw new Error(error.message)
 
-  // Suprimir advertencia de variable no usada
   void proyectoEmpresaId
+
+  await logAudit({
+    tenantId:   profile?.tenant_id,
+    userId:     user.id,
+    userNombre: profile?.nombre,
+    accion:     'responder_ticket',
+    entidad:    'ticket',
+    entidadId:  ticketId,
+  })
 
   revalidatePath(`/portal/tickets/${ticketId}`)
 }

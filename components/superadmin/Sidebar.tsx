@@ -9,6 +9,7 @@ const nav = [
   { href: '/superadmin',          label: 'Dashboard',   icon: '⊞' },
   { href: '/superadmin/tenants',  label: 'Empresas',    icon: '⬡' },
   { href: '/superadmin/admins',   label: 'Superadmins', icon: '◎' },
+  { href: '/superadmin/logs',     label: 'Actividad',   icon: '◈' },
 ]
 
 export default function SuperAdminSidebar() {

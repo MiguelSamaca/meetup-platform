@@ -4,6 +4,7 @@ import { revalidatePath } from 'next/cache'
 import { redirect } from 'next/navigation'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { getCurrentProfile } from '@/lib/auth'
+import { logAudit } from '@/lib/audit'
 
 async function requireAdmin() {
   const profile = await getCurrentProfile()
@@ -151,6 +152,16 @@ export async function crearCotizacion(
   // Auto-sync al catálogo de productos
   await sincronizarCatalogo(profile.tenant_id!, items)
 
+  await logAudit({
+    tenantId:   profile.tenant_id,
+    userId:     profile.id,
+    userNombre: profile.nombre,
+    accion:     'crear_cotizacion',
+    entidad:    'cotizacion',
+    entidadId:  cot.id,
+    detalles:   { consecutivo, contacto: contacto.nombre, estado, items: items.length },
+  })
+
   revalidatePath(`/admin/contactos/${contactoId}`)
   revalidatePath('/admin/cotizaciones')
   redirect(`/admin/contactos/${contactoId}`)
@@ -220,6 +231,16 @@ export async function editarCotizacion(
 
   // Auto-sync al catálogo de productos
   await sincronizarCatalogo(profile.tenant_id!, items)
+
+  await logAudit({
+    tenantId:   profile.tenant_id,
+    userId:     profile.id,
+    userNombre: profile.nombre,
+    accion:     'editar_cotizacion',
+    entidad:    'cotizacion',
+    entidadId:  cotizacionId,
+    detalles:   { estado, items: items.length },
+  })
 
   revalidatePath(`/admin/contactos/${contactoId}`)
   revalidatePath(`/admin/contactos/${contactoId}/cotizaciones/${cotizacionId}`)
