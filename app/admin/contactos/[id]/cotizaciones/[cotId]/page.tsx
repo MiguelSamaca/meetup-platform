@@ -2,6 +2,7 @@ import { createAdminClient } from '@/lib/supabase/admin'
 import { getCurrentProfile } from '@/lib/auth'
 import { notFound } from 'next/navigation'
 import Link from 'next/link'
+import { duplicarCotizacion } from '@/app/actions/cotizaciones'
 
 function fmt(n: number) {
   return n.toLocaleString('es-CO', { minimumFractionDigits: 0, maximumFractionDigits: 0 })
@@ -76,6 +77,15 @@ export default async function DetalleCotizacionPage({
           {cot.estado}
         </span>
         <div className="ml-auto flex items-center gap-3">
+          {/* Duplicar — Server Action via form */}
+          <form action={duplicarCotizacion.bind(null, cotId, id)}>
+            <button
+              type="submit"
+              className="border border-blue-300 hover:bg-blue-50 text-blue-700 text-sm font-semibold px-4 py-2 rounded-lg transition-colors"
+            >
+              ⧉ Duplicar
+            </button>
+          </form>
           <Link
             href={`/admin/contactos/${id}/cotizaciones/${cotId}/editar`}
             className="border border-gray-300 hover:bg-gray-50 text-gray-700 text-sm font-semibold px-4 py-2 rounded-lg transition-colors"

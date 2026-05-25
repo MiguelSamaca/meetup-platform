@@ -263,3 +263,97 @@ export async function eliminarCotizacion(id: string, contactoId: string) {
   revalidatePath(`/admin/contactos/${contactoId}`)
   redirect(`/admin/contactos/${contactoId}`)
 }
+
+export async function duplicarCotizacion(cotizacionId: string, contactoId: string) {
+  const profile = await requireAdmin()
+  const admin   = createAdminClient()
+
+  // 1. Leer la cotización original con todos sus ítems
+  const { data: original } = await admin
+    .from('cotizaciones')
+    .select(`
+      contacto_id, notas, validez_dias, mostrar_descuento,
+      cotizacion_items(
+        referencia, proveedor, descripcion, cantidad,
+        precio_unitario, descuento, moneda_costo,
+        costo_unitario, trm, orden, foto_url
+      )
+    `)
+    .eq('id', cotizacionId)
+    .eq('tenant_id', profile.tenant_id!)
+    .single()
+
+  if (!original) throw new Error('Cotización no encontrada')
+
+  // 2. Generar nuevo consecutivo
+  const { count } = await admin
+    .from('cotizaciones')
+    .select('*', { count: 'exact', head: true })
+    .eq('tenant_id', profile.tenant_id!)
+
+  const now         = new Date()
+  const yyyymm      = `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, '0')}`
+  const consecutivo = `COT-${yyyymm}-${String((count ?? 0) + 1).padStart(3, '0')}`
+
+  // 3. Insertar nueva cotización (borrador, fecha hoy)
+  const { data: nueva, error: cotError } = await admin
+    .from('cotizaciones')
+    .insert({
+      tenant_id:         profile.tenant_id,
+      contacto_id:       original.contacto_id,
+      consecutivo,
+      estado:            'borrador',
+      notas:             original.notas ?? null,
+      fecha:             now.toISOString().split('T')[0],
+      validez_dias:      original.validez_dias ?? 30,
+      mostrar_descuento: original.mostrar_descuento ?? true,
+    })
+    .select('id')
+    .single()
+
+  if (cotError || !nueva) throw new Error(cotError?.message ?? 'Error duplicando cotización')
+
+  // 4. Copiar todos los ítems
+  const items = (original.cotizacion_items ?? []) as Array<{
+    referencia: string | null; proveedor: string | null; descripcion: string
+    cantidad: number; precio_unitario: number; descuento: number
+    moneda_costo: string; costo_unitario: number; trm: number | null
+    orden: number; foto_url: string | null
+  }>
+
+  if (items.length > 0) {
+    const { error: itemsError } = await admin
+      .from('cotizacion_items')
+      .insert(items.map(it => ({
+        cotizacion_id:   nueva.id,
+        referencia:      it.referencia,
+        proveedor:       it.proveedor,
+        descripcion:     it.descripcion,
+        cantidad:        it.cantidad,
+        precio_unitario: it.precio_unitario,
+        descuento:       it.descuento ?? 0,
+        moneda_costo:    it.moneda_costo,
+        costo_unitario:  it.costo_unitario,
+        trm:             it.trm,
+        orden:           it.orden,
+        foto_url:        it.foto_url,
+      })))
+
+    if (itemsError) throw new Error(itemsError.message)
+  }
+
+  await logAudit({
+    tenantId:   profile.tenant_id,
+    userId:     profile.id,
+    userNombre: profile.nombre,
+    accion:     'crear_cotizacion',
+    entidad:    'cotizacion',
+    entidadId:  nueva.id,
+    detalles:   { consecutivo, duplicada_de: cotizacionId, items: items.length },
+  })
+
+  revalidatePath(`/admin/contactos/${contactoId}`)
+  revalidatePath('/admin/cotizaciones')
+  // Redirigir al editar para que el usuario ajuste la copia
+  redirect(`/admin/contactos/${contactoId}/cotizaciones/${nueva.id}/editar`)
+}
