@@ -156,19 +156,42 @@ export default function CotizacionForm({
     })
   }
 
-  /** Recalcula precio_unitario para que el margen sea el % indicado.
-   *  precio = costo_cop / (1 - margen/100)
+  /**
+   * Cálculo bidireccional de margen:
+   *
+   * A) Precio conocido, costo desconocido → calcula costo:
+   *    costo_COP = precio * (1 - margen/100)
+   *    Si moneda USD: costo_USD = costo_COP / TRM
+   *
+   * B) Costo conocido, precio desconocido → calcula precio (comportamiento original):
+   *    precio = costo_COP / (1 - margen/100)
    */
   function applyMargen(key: number, margenTarget: number) {
     if (margenTarget <= 0 || margenTarget >= 100) return
     setRows(current => current.map(row => {
       if (row.key !== key) return row
-      const cost    = parseFloat(row.costo_unitario) || 0
-      const trm     = parseFloat(row.trm)            || 0
+
+      const price   = parseFloat(row.precio_unitario) || 0
+      const cost    = parseFloat(row.costo_unitario)  || 0
+      const trm     = parseFloat(row.trm)             || 0
       const costCOP = row.moneda_costo === 'USD' ? cost * trm : cost
-      if (costCOP <= 0) return row           // sin costo no se puede calcular
-      const newPrecio = costCOP / (1 - margenTarget / 100)
-      return { ...row, precio_unitario: Math.round(newPrecio).toString() }
+
+      // A) Precio conocido pero sin costo → calculamos costo
+      if (price > 0 && costCOP <= 0) {
+        const nuevoCostoCOP = price * (1 - margenTarget / 100)
+        const nuevoCosto    = row.moneda_costo === 'USD' && trm > 0
+          ? nuevoCostoCOP / trm          // convertir COP → USD
+          : nuevoCostoCOP
+        return { ...row, costo_unitario: Math.round(nuevoCosto).toString() }
+      }
+
+      // B) Costo conocido → calculamos precio
+      if (costCOP > 0) {
+        const newPrecio = costCOP / (1 - margenTarget / 100)
+        return { ...row, precio_unitario: Math.round(newPrecio).toString() }
+      }
+
+      return row   // sin precio ni costo, nada que calcular
     }))
   }
 
@@ -508,7 +531,7 @@ export default function CotizacionForm({
                         min="1" max="99" step="any"
                         defaultValue={margen > 0 && isFinite(margen) ? margen.toFixed(1) : ''}
                         placeholder="Obj."
-                        title="Escribe el margen deseado y presiona Enter para recalcular el precio"
+                        title="Con precio y sin costo: calcula el costo. Con costo y sin precio: calcula el precio."
                         onKeyDown={e => {
                           if (e.key === 'Enter') {
                             e.preventDefault()
