@@ -307,7 +307,7 @@ export default function CotizacionForm({
               <th className="text-left px-3 py-2.5 font-semibold text-gray-600">Descripción *</th>
               <th className="text-right px-3 py-2.5 font-semibold text-gray-600 w-40">Cant.</th>
               <th className="text-right px-3 py-2.5 font-semibold text-gray-600 w-44">Precio unit. (COP)</th>
-              <th className="text-right px-3 py-2.5 font-semibold text-gray-600 w-12">Desc. %</th>
+              <th className="text-right px-3 py-2.5 font-semibold text-gray-600 w-20">Desc. %</th>
               <th className="text-right px-3 py-2.5 font-semibold text-gray-600 w-36">Total venta</th>
               <th className="text-center px-3 py-2.5 font-semibold text-gray-600 w-22">Moneda</th>
               <th className="text-right px-3 py-2.5 font-semibold text-gray-600 w-44 min-w-[140px]">Costo unit.</th>
@@ -441,14 +441,14 @@ export default function CotizacionForm({
                   </td>
 
                   {/* Descuento % */}
-                  <td className="px-1 py-2">
+                  <td className="px-2 py-2">
                     <div className="relative flex items-center">
                       <input type="number" min="0" max="100" step="any" value={row.descuento}
                         onChange={e => updateRow(row.key, { descuento: e.target.value })}
                         placeholder="0"
-                        className="w-12 px-1 py-1.5 pr-4 border border-gray-200 rounded text-sm text-right focus:outline-none focus:ring-1 focus:ring-emerald-400"
+                        className="w-20 px-2 py-1.5 pr-5 border border-gray-200 rounded text-sm text-right focus:outline-none focus:ring-1 focus:ring-emerald-400"
                       />
-                      <span className="absolute right-1 text-xs text-gray-400 pointer-events-none">%</span>
+                      <span className="absolute right-1.5 text-xs text-gray-400 pointer-events-none">%</span>
                     </div>
                   </td>
 
