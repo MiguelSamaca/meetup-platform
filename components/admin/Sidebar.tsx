@@ -20,6 +20,7 @@ const sections = [
     items: [
       { href: '/admin/proyectos',    label: 'Proyectos',    icon: '◫' },
       { href: '/admin/cotizaciones', label: 'Cotizaciones', icon: '◑' },
+      { href: '/admin/ordenes',      label: 'Órdenes',      icon: '▣' },
       { href: '/admin/productos',    label: 'Productos',    icon: '▦' },
     ],
   },

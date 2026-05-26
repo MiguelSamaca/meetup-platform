@@ -1,0 +1,265 @@
+'use server'
+
+import { revalidatePath } from 'next/cache'
+import { redirect }       from 'next/navigation'
+import { createAdminClient } from '@/lib/supabase/admin'
+import { getCurrentProfile } from '@/lib/auth'
+import { logAudit }          from '@/lib/audit'
+
+async function requireAdmin() {
+  const profile = await getCurrentProfile()
+  if (!profile || profile.rol !== 'admin' || !profile.tenant_id) {
+    throw new Error('No autorizado')
+  }
+  return profile
+}
+
+/* ─────────────────────────────────────────────────────────────
+   Crear OE desde cotización aprobada
+───────────────────────────────────────────────────────────── */
+export async function crearOrdenEjecucion(cotizacionId: string, contactoId: string) {
+  const profile = await requireAdmin()
+  const admin   = createAdminClient()
+
+  // ¿Ya existe una OE para esta cotización?
+  const { data: existing } = await admin
+    .from('ordenes_ejecucion')
+    .select('id')
+    .eq('cotizacion_id', cotizacionId)
+    .eq('tenant_id', profile.tenant_id!)
+    .maybeSingle()
+
+  if (existing) redirect(`/admin/ordenes/${existing.id}`)
+
+  // Leer ítems de la cotización
+  const { data: cot } = await admin
+    .from('cotizaciones')
+    .select('cotizacion_items(referencia, proveedor, descripcion, cantidad, precio_unitario, descuento, orden)')
+    .eq('id', cotizacionId)
+    .eq('tenant_id', profile.tenant_id!)
+    .single()
+
+  if (!cot) throw new Error('Cotización no encontrada')
+
+  const items = (cot.cotizacion_items ?? []) as Array<{
+    referencia: string | null; proveedor: string | null; descripcion: string
+    cantidad: number; precio_unitario: number; descuento: number; orden: number
+  }>
+
+  // Total neto (con descuentos)
+  const totalCotizacion = Math.round(
+    items.reduce((sum, it) => {
+      const bruto = it.cantidad * it.precio_unitario
+      return sum + bruto * (1 - (it.descuento ?? 0) / 100)
+    }, 0)
+  )
+
+  // Consecutivo OE-YYYYMM-NNN
+  const { count } = await admin
+    .from('ordenes_ejecucion')
+    .select('*', { count: 'exact', head: true })
+    .eq('tenant_id', profile.tenant_id!)
+
+  const now         = new Date()
+  const yyyymm      = `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, '0')}`
+  const consecutivo = `OE-${yyyymm}-${String((count ?? 0) + 1).padStart(3, '0')}`
+
+  const anticipo_porcentaje = 50
+  const anticipo_monto      = Math.round(totalCotizacion * anticipo_porcentaje / 100)
+
+  const { data: oe, error } = await admin
+    .from('ordenes_ejecucion')
+    .insert({
+      tenant_id:           profile.tenant_id,
+      cotizacion_id:       cotizacionId,
+      contacto_id:         contactoId,
+      consecutivo,
+      estado:              'activa',
+      total_cotizacion:    totalCotizacion,
+      anticipo_porcentaje,
+      anticipo_monto,
+    })
+    .select('id')
+    .single()
+
+  if (error || !oe) throw new Error(error?.message ?? 'Error creando orden')
+
+  if (items.length > 0) {
+    await admin.from('oe_items').insert(
+      items.map(it => ({
+        orden_ejecucion_id: oe.id,
+        proveedor:          it.proveedor  ?? null,
+        referencia:         it.referencia ?? null,
+        descripcion:        it.descripcion,
+        cantidad:           it.cantidad,
+        estado:             'pendiente',
+        orden:              it.orden ?? 0,
+      }))
+    )
+  }
+
+  await logAudit({
+    tenantId:   profile.tenant_id,
+    userId:     profile.id,
+    userNombre: profile.nombre,
+    accion:     'crear_orden_ejecucion',
+    entidad:    'orden_ejecucion',
+    entidadId:  oe.id,
+    detalles:   { consecutivo, cotizacion_id: cotizacionId, items: items.length },
+  })
+
+  revalidatePath(`/admin/contactos/${contactoId}`)
+  revalidatePath('/admin/ordenes')
+  redirect(`/admin/ordenes/${oe.id}`)
+}
+
+/* ─────────────────────────────────────────────────────────────
+   Actualizar datos de anticipo del cliente
+───────────────────────────────────────────────────────────── */
+export async function actualizarAnticipo(
+  oeId: string,
+  data: {
+    anticipo_porcentaje?: number
+    anticipo_monto?:      number
+    anticipo_fecha?:      string | null
+    anticipo_recibido?:   boolean
+  }
+) {
+  const profile = await requireAdmin()
+  const admin   = createAdminClient()
+
+  await admin
+    .from('ordenes_ejecucion')
+    .update(data)
+    .eq('id', oeId)
+    .eq('tenant_id', profile.tenant_id!)
+
+  revalidatePath(`/admin/ordenes/${oeId}`)
+}
+
+/* ─────────────────────────────────────────────────────────────
+   Actualizar saldo del cliente
+───────────────────────────────────────────────────────────── */
+export async function actualizarSaldo(
+  oeId: string,
+  data: { saldo_fecha?: string | null; saldo_recibido?: boolean }
+) {
+  const profile = await requireAdmin()
+  const admin   = createAdminClient()
+
+  await admin
+    .from('ordenes_ejecucion')
+    .update(data)
+    .eq('id', oeId)
+    .eq('tenant_id', profile.tenant_id!)
+
+  revalidatePath(`/admin/ordenes/${oeId}`)
+}
+
+/* ─────────────────────────────────────────────────────────────
+   Actualizar estado de un ítem (pendiente / pedido / recibido)
+───────────────────────────────────────────────────────────── */
+export async function actualizarItemEstado(
+  oeId:   string,
+  itemId: string,
+  estado: 'pendiente' | 'pedido' | 'recibido',
+  eta?:   string | null
+) {
+  const profile = await requireAdmin()
+  const admin   = createAdminClient()
+
+  await admin
+    .from('oe_items')
+    .update({ estado, ...(eta !== undefined ? { eta: eta || null } : {}) })
+    .eq('id', itemId)
+    .eq('orden_ejecucion_id', oeId)
+
+  revalidatePath(`/admin/ordenes/${oeId}`)
+}
+
+/* ─────────────────────────────────────────────────────────────
+   Marcar/desmarcar anticipo del proveedor (por grupo)
+───────────────────────────────────────────────────────────── */
+export async function actualizarAnticipoProv(
+  oeId:      string,
+  proveedor: string | null,
+  pagado:    boolean
+) {
+  const profile = await requireAdmin()
+  const admin   = createAdminClient()
+
+  let query = admin
+    .from('oe_items')
+    .update({ anticipo_proveedor_pagado: pagado })
+    .eq('orden_ejecucion_id', oeId)
+
+  if (proveedor === null) {
+    query = (query as any).is('proveedor', null)
+  } else {
+    query = (query as any).eq('proveedor', proveedor)
+  }
+
+  await query
+  revalidatePath(`/admin/ordenes/${oeId}`)
+}
+
+/* ─────────────────────────────────────────────────────────────
+   Actualizar ETA de un ítem
+───────────────────────────────────────────────────────────── */
+export async function actualizarItemEta(
+  oeId:   string,
+  itemId: string,
+  eta:    string | null
+) {
+  const profile = await requireAdmin()
+  const admin   = createAdminClient()
+
+  await admin
+    .from('oe_items')
+    .update({ eta: eta || null })
+    .eq('id', itemId)
+    .eq('orden_ejecucion_id', oeId)
+
+  revalidatePath(`/admin/ordenes/${oeId}`)
+}
+
+/* ─────────────────────────────────────────────────────────────
+   Completar / reabrir orden
+───────────────────────────────────────────────────────────── */
+export async function completarOrden(oeId: string) {
+  const profile = await requireAdmin()
+  const admin   = createAdminClient()
+
+  await admin
+    .from('ordenes_ejecucion')
+    .update({ estado: 'completada', completed_at: new Date().toISOString() })
+    .eq('id', oeId)
+    .eq('tenant_id', profile.tenant_id!)
+
+  await logAudit({
+    tenantId:   profile.tenant_id,
+    userId:     profile.id,
+    userNombre: profile.nombre,
+    accion:     'completar_orden_ejecucion',
+    entidad:    'orden_ejecucion',
+    entidadId:  oeId,
+    detalles:   {},
+  })
+
+  revalidatePath(`/admin/ordenes/${oeId}`)
+  revalidatePath('/admin/ordenes')
+}
+
+export async function reabrirOrden(oeId: string) {
+  const profile = await requireAdmin()
+  const admin   = createAdminClient()
+
+  await admin
+    .from('ordenes_ejecucion')
+    .update({ estado: 'activa', completed_at: null })
+    .eq('id', oeId)
+    .eq('tenant_id', profile.tenant_id!)
+
+  revalidatePath(`/admin/ordenes/${oeId}`)
+  revalidatePath('/admin/ordenes')
+}

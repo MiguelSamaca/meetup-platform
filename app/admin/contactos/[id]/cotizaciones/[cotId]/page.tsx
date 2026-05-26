@@ -3,6 +3,7 @@ import { getCurrentProfile } from '@/lib/auth'
 import { notFound } from 'next/navigation'
 import Link from 'next/link'
 import { duplicarCotizacion } from '@/app/actions/cotizaciones'
+import { crearOrdenEjecucion } from '@/app/actions/ordenes'
 
 function fmt(n: number) {
   return n.toLocaleString('es-CO', { minimumFractionDigits: 0, maximumFractionDigits: 0 })
@@ -24,7 +25,7 @@ export default async function DetalleCotizacionPage({
   const profile       = await getCurrentProfile()
   const supabase      = createAdminClient()
 
-  const [{ data: contacto }, { data: cot }] = await Promise.all([
+  const [{ data: contacto }, { data: cot }, { data: oeExistente }] = await Promise.all([
     supabase
       .from('contactos')
       .select('id, nombre, email, empresas(nombre)')
@@ -40,6 +41,12 @@ export default async function DetalleCotizacionPage({
       .eq('id', cotId)
       .eq('tenant_id', profile?.tenant_id!)
       .single(),
+    supabase
+      .from('ordenes_ejecucion')
+      .select('id, consecutivo')
+      .eq('cotizacion_id', cotId)
+      .eq('tenant_id', profile?.tenant_id!)
+      .maybeSingle(),
   ])
 
   if (!contacto || !cot) notFound()
@@ -77,6 +84,25 @@ export default async function DetalleCotizacionPage({
           {cot.estado}
         </span>
         <div className="ml-auto flex items-center gap-3">
+          {/* Orden de Ejecución */}
+          {oeExistente ? (
+            <Link
+              href={`/admin/ordenes/${oeExistente.id}`}
+              className="border border-emerald-300 hover:bg-emerald-50 text-emerald-700 text-sm font-semibold px-4 py-2 rounded-lg transition-colors flex items-center gap-1.5"
+            >
+              ▶ {oeExistente.consecutivo}
+            </Link>
+          ) : cot.estado === 'aprobada' ? (
+            <form action={crearOrdenEjecucion.bind(null, cotId, id)}>
+              <button
+                type="submit"
+                className="bg-emerald-500 hover:bg-emerald-600 text-white text-sm font-semibold px-4 py-2 rounded-lg transition-colors flex items-center gap-1.5"
+              >
+                ▶ Abrir proyecto
+              </button>
+            </form>
+          ) : null}
+
           {/* Duplicar — Server Action via form */}
           <form action={duplicarCotizacion.bind(null, cotId, id)}>
             <button
