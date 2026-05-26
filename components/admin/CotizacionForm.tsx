@@ -141,6 +141,26 @@ export default function CotizacionForm({
     setCounter(c => c + 1)
   }
   function removeRow(key: number) { setRows(r => r.filter(row => row.key !== key)) }
+
+  function moveRowUp(key: number) {
+    setRows(prev => {
+      const idx = prev.findIndex(r => r.key === key)
+      if (idx <= 0) return prev
+      const next = [...prev]
+      ;[next[idx - 1], next[idx]] = [next[idx], next[idx - 1]]
+      return next
+    })
+  }
+
+  function moveRowDown(key: number) {
+    setRows(prev => {
+      const idx = prev.findIndex(r => r.key === key)
+      if (idx >= prev.length - 1) return prev
+      const next = [...prev]
+      ;[next[idx], next[idx + 1]] = [next[idx + 1], next[idx]]
+      return next
+    })
+  }
   function updateRow(key: number, patch: Partial<ItemRow>) {
     setRows(r => r.map(row => row.key === key ? { ...row, ...patch } : row))
   }
@@ -304,7 +324,7 @@ export default function CotizacionForm({
         <table className="w-full text-sm min-w-[1400px]">
           <thead className="bg-gray-50 border-b border-gray-200">
             <tr>
-              <th className="text-left px-3 py-2.5 font-semibold text-gray-600 w-7">#</th>
+              <th className="text-center px-1 py-2.5 font-semibold text-gray-600 w-12">#</th>
               <th className="text-center px-2 py-2.5 font-semibold text-gray-600 w-20">Foto</th>
               <th className="text-left px-3 py-2.5 font-semibold text-gray-600 w-36">Ref.</th>
               <th className="text-left px-3 py-2.5 font-semibold text-gray-600 w-36">Proveedor/Marca</th>
@@ -318,7 +338,7 @@ export default function CotizacionForm({
               <th className="text-right px-3 py-2.5 font-semibold text-gray-600 w-40">TRM (COP/USD)</th>
               <th className="text-right px-3 py-2.5 font-semibold text-gray-600 w-32">Costo total</th>
               <th className="text-right px-3 py-2.5 font-semibold text-gray-600 w-28">Margen / Obj.</th>
-              <th className="w-8"></th>
+              <th className="w-14"></th>
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-100">
@@ -335,7 +355,20 @@ export default function CotizacionForm({
 
               return (
                 <tr key={row.key} className="hover:bg-gray-50 align-top">
-                  <td className="px-3 py-2 text-gray-400 text-xs pt-3">{idx + 1}</td>
+                  {/* # + flechas de orden */}
+                  <td className="px-1 py-2 text-center">
+                    <div className="flex flex-col items-center gap-0.5">
+                      <span className="text-gray-400 text-xs font-medium mb-0.5">{idx + 1}</span>
+                      <button type="button" onClick={() => moveRowUp(row.key)}
+                        disabled={idx === 0}
+                        className="text-gray-300 hover:text-gray-600 disabled:opacity-20 leading-none text-base px-1"
+                        title="Subir">▲</button>
+                      <button type="button" onClick={() => moveRowDown(row.key)}
+                        disabled={idx === rows.length - 1}
+                        className="text-gray-300 hover:text-gray-600 disabled:opacity-20 leading-none text-base px-1"
+                        title="Bajar">▼</button>
+                    </div>
+                  </td>
 
                   {/* Foto */}
                   <td className="px-2 py-2 text-center">
