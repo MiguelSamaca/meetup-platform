@@ -38,7 +38,8 @@ interface Props {
   initialFecha?:          string
   initialValidez?:        number
   initialItems?:          InitialItem[]
-  initialMostrarDesc?:    boolean
+  initialMostrarDescProd?:  boolean
+  initialMostrarDescTotal?: boolean
 }
 
 interface ItemRow {
@@ -118,7 +119,8 @@ export default function CotizacionForm({
   initialFecha,
   initialValidez   = 30,
   initialItems,
-  initialMostrarDesc = true,
+  initialMostrarDescProd  = true,
+  initialMostrarDescTotal = true,
 }: Props) {
   const today   = new Date().toISOString().split('T')[0]
   const isEdit  = Boolean(cotizacionId)
@@ -132,7 +134,8 @@ export default function CotizacionForm({
   const [notas,        setNotas]       = useState(initialNotas)
   const [fecha,        setFecha]       = useState(initialFecha ?? today)
   const [validez,      setValidez]     = useState(initialValidez)
-  const [mostrarDesc,  setMostrarDesc] = useState(initialMostrarDesc)
+  const [mostrarDescProd,  setMostrarDescProd]  = useState(initialMostrarDescProd)
+  const [mostrarDescTotal, setMostrarDescTotal] = useState(initialMostrarDescTotal)
   const [counter,      setCounter]     = useState(initRows.length + 1)
   const [pending, startTransition] = useTransition()
 
@@ -235,9 +238,9 @@ export default function CotizacionForm({
 
     startTransition(() => {
       if (isEdit && cotizacionId) {
-        editarCotizacion(cotizacionId, contactoId, estado, notas, items, fecha, validez, mostrarDesc)
+        editarCotizacion(cotizacionId, contactoId, estado, notas, items, fecha, validez, mostrarDescProd, mostrarDescTotal)
       } else {
-        crearCotizacion(contactoId, estado, notas, items, fecha, validez, mostrarDesc)
+        crearCotizacion(contactoId, estado, notas, items, fecha, validez, mostrarDescProd, mostrarDescTotal)
       }
     })
   }
@@ -686,16 +689,27 @@ export default function CotizacionForm({
         <span className="text-red-500 font-medium">■</span> &lt; 15%
       </div>
 
-      {/* Toggle visibilidad de descuentos en el PDF */}
-      <label className="inline-flex items-center gap-2 cursor-pointer select-none">
-        <input
-          type="checkbox"
-          checked={mostrarDesc}
-          onChange={e => setMostrarDesc(e.target.checked)}
-          className="w-4 h-4 rounded accent-emerald-500"
-        />
-        <span className="text-sm text-gray-600">Mostrar descuentos en la cotización exportada</span>
-      </label>
+      {/* Toggles de visibilidad de descuentos en el PDF */}
+      <div className="flex flex-wrap gap-x-6 gap-y-2">
+        <label className="inline-flex items-center gap-2 cursor-pointer select-none">
+          <input
+            type="checkbox"
+            checked={mostrarDescProd}
+            onChange={e => setMostrarDescProd(e.target.checked)}
+            className="w-4 h-4 rounded accent-emerald-500"
+          />
+          <span className="text-sm text-gray-600">Mostrar descuento por producto en exportación</span>
+        </label>
+        <label className="inline-flex items-center gap-2 cursor-pointer select-none">
+          <input
+            type="checkbox"
+            checked={mostrarDescTotal}
+            onChange={e => setMostrarDescTotal(e.target.checked)}
+            className="w-4 h-4 rounded accent-emerald-500"
+          />
+          <span className="text-sm text-gray-600">Mostrar descuento total en exportación</span>
+        </label>
+      </div>
 
       <div className="flex items-center gap-3 pt-2">
         <button type="button" onClick={addRow}

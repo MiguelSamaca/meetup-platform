@@ -23,7 +23,7 @@ export default async function EditarCotizacionPage({
     supabase
       .from('cotizaciones')
       .select(`
-        id, consecutivo, estado, notas, fecha, validez_dias, mostrar_descuento,
+        id, consecutivo, estado, notas, fecha, validez_dias, mostrar_descuento, mostrar_descuento_total,
         cotizacion_items(id, referencia, proveedor, descripcion, cantidad, precio_unitario,
           descuento, moneda_costo, costo_unitario, trm, foto_url, orden)
       `)
@@ -92,7 +92,8 @@ export default async function EditarCotizacionPage({
           initialNotas={cot.notas ?? ''}
           initialFecha={cot.fecha ?? undefined}
           initialValidez={cot.validez_dias ?? 30}
-          initialMostrarDesc={cot.mostrar_descuento ?? true}
+          initialMostrarDescProd={(cot as any).mostrar_descuento ?? true}
+          initialMostrarDescTotal={(cot as any).mostrar_descuento_total ?? true}
           initialItems={items.map(it => ({
             ...it,
             descuento: it.descuento ?? 0,

@@ -81,13 +81,14 @@ export interface ItemInput {
 }
 
 export async function crearCotizacion(
-  contactoId:       string,
-  estado:           string,
-  notas:            string,
-  items:            ItemInput[],
-  fecha:            string,
-  validez_dias:     number,
-  mostrar_descuento: boolean = true,
+  contactoId:              string,
+  estado:                  string,
+  notas:                   string,
+  items:                   ItemInput[],
+  fecha:                   string,
+  validez_dias:            number,
+  mostrar_descuento:       boolean = true,
+  mostrar_descuento_total: boolean = true,
 ) {
   const profile = await requireAdmin()
   const admin   = createAdminClient()
@@ -118,10 +119,11 @@ export async function crearCotizacion(
       contacto_id:       contactoId,
       consecutivo,
       estado,
-      notas:             notas || null,
-      fecha:             fecha || new Date().toISOString().split('T')[0],
-      validez_dias:      validez_dias || 30,
+      notas:                   notas || null,
+      fecha:                   fecha || new Date().toISOString().split('T')[0],
+      validez_dias:            validez_dias || 30,
       mostrar_descuento,
+      mostrar_descuento_total,
     })
     .select('id')
     .single()
@@ -168,14 +170,15 @@ export async function crearCotizacion(
 }
 
 export async function editarCotizacion(
-  cotizacionId:      string,
-  contactoId:        string,
-  estado:            string,
-  notas:             string,
-  items:             ItemInput[],
-  fecha:             string,
-  validez_dias:      number,
-  mostrar_descuento: boolean = true,
+  cotizacionId:            string,
+  contactoId:              string,
+  estado:                  string,
+  notas:                   string,
+  items:                   ItemInput[],
+  fecha:                   string,
+  validez_dias:            number,
+  mostrar_descuento:       boolean = true,
+  mostrar_descuento_total: boolean = true,
 ) {
   const profile = await requireAdmin()
   const admin   = createAdminClient()
@@ -195,10 +198,11 @@ export async function editarCotizacion(
     .from('cotizaciones')
     .update({
       estado,
-      notas:             notas || null,
-      fecha:             fecha || new Date().toISOString().split('T')[0],
-      validez_dias:      validez_dias || 30,
+      notas:                   notas || null,
+      fecha:                   fecha || new Date().toISOString().split('T')[0],
+      validez_dias:            validez_dias || 30,
       mostrar_descuento,
+      mostrar_descuento_total,
     })
     .eq('id', cotizacionId)
     .eq('tenant_id', profile.tenant_id!)

@@ -51,7 +51,7 @@ export default async function ImprimirCotizacionPage({
     supabase
       .from('cotizaciones')
       .select(`
-        id, consecutivo, estado, notas, fecha, validez_dias, created_at, mostrar_descuento,
+        id, consecutivo, estado, notas, fecha, validez_dias, created_at, mostrar_descuento, mostrar_descuento_total,
         cotizacion_items(id, referencia, proveedor, descripcion, cantidad, precio_unitario,
           descuento, moneda_costo, costo_unitario, trm, orden, foto_url)
       `)
@@ -67,7 +67,8 @@ export default async function ImprimirCotizacionPage({
 
   if (!contacto || !cot) notFound()
 
-  const mostrarDescuento = (cot as any).mostrar_descuento ?? true
+  const mostrarDescProd  = (cot as any).mostrar_descuento        ?? true
+  const mostrarDescTotal = (cot as any).mostrar_descuento_total  ?? true
 
   const items = ((cot.cotizacion_items ?? []) as Array<{
     id: string; referencia: string | null; descripcion: string
@@ -191,13 +192,13 @@ export default async function ImprimirCotizacionPage({
           {/* table-layout:fixed + colgroup garantiza anchos consistentes en pantalla Y en PDF */}
           <table className="w-full text-sm border-collapse" style={{ tableLayout: 'fixed' }}>
             <colgroup>
-              <col style={{ width: mostrarDescuento && hayDescuento ? '5%'  : '6%'  }} />
-              <col style={{ width: mostrarDescuento && hayDescuento ? '11%' : '12%' }} />
-              <col style={{ width: mostrarDescuento && hayDescuento ? '15%' : '17%' }} />
-              <col style={{ width: mostrarDescuento && hayDescuento ? '31%' : '35%' }} />
-              <col style={{ width: mostrarDescuento && hayDescuento ? '13%' : '15%' }} />
-              {mostrarDescuento && hayDescuento && <col style={{ width: '10%' }} />}
-              <col style={{ width: mostrarDescuento && hayDescuento ? '15%' : '15%' }} />
+              <col style={{ width: mostrarDescProd && hayDescuento ? '5%'  : '6%'  }} />
+              <col style={{ width: mostrarDescProd && hayDescuento ? '11%' : '12%' }} />
+              <col style={{ width: mostrarDescProd && hayDescuento ? '15%' : '17%' }} />
+              <col style={{ width: mostrarDescProd && hayDescuento ? '31%' : '35%' }} />
+              <col style={{ width: mostrarDescProd && hayDescuento ? '13%' : '15%' }} />
+              {mostrarDescProd && hayDescuento && <col style={{ width: '10%' }} />}
+              <col style={{ width: '15%' }} />
             </colgroup>
             <thead>
               <tr className="border-b-2 border-gray-800">
@@ -206,7 +207,7 @@ export default async function ImprimirCotizacionPage({
                 <th className="text-left py-2 px-3 font-bold text-gray-800">Ref. / Marca</th>
                 <th className="text-left py-2 px-3 font-bold text-gray-800">Descripción</th>
                 <th className="text-right py-2 px-3 font-bold text-gray-800">Precio unit.</th>
-                {mostrarDescuento && hayDescuento && (
+                {mostrarDescProd && hayDescuento && (
                   <th className="text-right py-2 px-2 font-bold text-gray-800">Desc.</th>
                 )}
                 <th className="text-right py-2 font-bold text-gray-800">Total</th>
@@ -250,8 +251,8 @@ export default async function ImprimirCotizacionPage({
                   {/* Precio unit. */}
                   <td className="py-3 px-3 text-right text-gray-700 text-xs whitespace-nowrap">${fmt(r.precio_unitario)}</td>
 
-                  {/* Descuento (solo si mostrarDescuento y hay algún descuento en la cot.) */}
-                  {mostrarDescuento && hayDescuento && (
+                  {/* Descuento por producto (solo si mostrarDescProd y hay algún descuento en la cot.) */}
+                  {mostrarDescProd && hayDescuento && (
                     <td className="py-3 px-2 text-right text-xs whitespace-nowrap">
                       {r.desc > 0
                         ? <span className="text-red-500 font-semibold">{r.desc}%</span>
@@ -262,7 +263,7 @@ export default async function ImprimirCotizacionPage({
 
                   {/* Total neto */}
                   <td className="py-3 text-right font-semibold text-gray-900 text-xs whitespace-nowrap">
-                    {mostrarDescuento && r.descMonto > 0 ? (
+                    {mostrarDescProd && r.descMonto > 0 ? (
                       <span style={{ color: colorPrimario }}>${fmt(r.precioTotal)}</span>
                     ) : (
                       <span>${fmt(r.precioTotal)}</span>
@@ -272,35 +273,35 @@ export default async function ImprimirCotizacionPage({
               ))}
             </tbody>
             <tfoot>
-              {/* Subtotal bruto (solo si hay descuentos visibles) */}
-              {mostrarDescuento && hayDescuento && (
+              {/* Subtotal bruto (solo si hay descuento Y se activa mostrarDescTotal) */}
+              {mostrarDescTotal && hayDescuento && (
                 <tr style={{ borderTop: '2px solid #e5e7eb' }}>
-                  <td colSpan={mostrarDescuento && hayDescuento ? 5 : 4} />
+                  <td colSpan={mostrarDescProd && hayDescuento ? 5 : 4} />
                   <td className="py-1.5 px-3 text-right text-gray-500 text-xs">Subtotal bruto</td>
                   <td className="py-1.5 text-right text-gray-400 text-xs line-through">${fmt(totalBase)}</td>
                 </tr>
               )}
-              {mostrarDescuento && hayDescuento && (
+              {mostrarDescTotal && hayDescuento && (
                 <tr>
-                  <td colSpan={mostrarDescuento && hayDescuento ? 5 : 4} />
+                  <td colSpan={mostrarDescProd && hayDescuento ? 5 : 4} />
                   <td className="py-1 px-3 text-right text-red-500 text-xs font-semibold">Descuento</td>
                   <td className="py-1 text-right text-red-500 text-xs font-semibold">- ${fmt(totalDescuento)}</td>
                 </tr>
               )}
               {/* SUBTOTAL neto — resaltado con color primario */}
               <tr style={{ borderTop: `2px solid ${colorPrimario}` }}>
-                <td colSpan={mostrarDescuento && hayDescuento ? 5 : 4} />
+                <td colSpan={mostrarDescProd && hayDescuento ? 5 : 4} />
                 <td className="py-3 px-3 text-right font-bold text-base" style={{ color: colorPrimario }}>SUBTOTAL</td>
                 <td className="py-3 text-right font-bold text-xl" style={{ color: colorPrimario }}>${fmt(totalPrecio)}</td>
               </tr>
               <tr>
-                <td colSpan={mostrarDescuento && hayDescuento ? 5 : 4} />
+                <td colSpan={mostrarDescProd && hayDescuento ? 5 : 4} />
                 <td className="py-1 px-3 text-right text-gray-500 text-sm">IVA 19%</td>
                 <td className="py-1 text-right text-gray-600">${fmt(iva)}</td>
               </tr>
               {/* TOTAL — simple */}
               <tr className="border-t border-gray-300">
-                <td colSpan={mostrarDescuento && hayDescuento ? 5 : 4} />
+                <td colSpan={mostrarDescProd && hayDescuento ? 5 : 4} />
                 <td className="py-2 px-3 text-right font-semibold text-gray-700 text-sm">TOTAL</td>
                 <td className="py-2 text-right font-semibold text-gray-800">${fmt(total)}</td>
               </tr>
