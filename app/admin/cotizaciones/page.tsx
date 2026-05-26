@@ -29,7 +29,7 @@ export default async function CotizacionesPage({
     .select(`
       id, consecutivo, estado, notas, fecha, validez_dias, created_at,
       contactos(id, nombre, empresas(nombre)),
-      cotizacion_items(cantidad, precio_unitario, moneda_costo, costo_unitario, trm)
+      cotizacion_items(cantidad, precio_unitario, descuento, moneda_costo, costo_unitario, trm)
     `)
     .eq('tenant_id', profile?.tenant_id!)
     .order('created_at', { ascending: false })
@@ -39,13 +39,15 @@ export default async function CotizacionesPage({
   function computeTotals(cot: CotRow) {
     let totalPrecio = 0, totalCosto = 0
     const items = (cot.cotizacion_items ?? []) as Array<{
-      cantidad: number; precio_unitario: number
+      cantidad: number; precio_unitario: number; descuento: number
       moneda_costo: string; costo_unitario: number; trm: number | null
     }>
     for (const it of items) {
-      const p = it.cantidad * it.precio_unitario
-      const costoCOP = it.moneda_costo === 'USD' ? it.costo_unitario * (it.trm ?? 1) : it.costo_unitario
-      const c = it.cantidad * costoCOP
+      const desc      = it.descuento ?? 0
+      const bruto     = it.cantidad * it.precio_unitario
+      const p         = bruto * (1 - desc / 100)        // precio neto tras descuento
+      const costoCOP  = it.moneda_costo === 'USD' ? it.costo_unitario * (it.trm ?? 1) : it.costo_unitario
+      const c         = it.cantidad * costoCOP
       totalPrecio += p
       totalCosto  += c
     }
