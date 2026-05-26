@@ -357,15 +357,15 @@ export default function CotizacionForm({
                 <tr key={row.key} className="hover:bg-gray-50 align-top">
                   {/* # + flechas de orden */}
                   <td className="px-1 py-2 text-center">
-                    <div className="flex flex-col items-center gap-0.5">
-                      <span className="text-gray-400 text-xs font-medium mb-0.5">{idx + 1}</span>
+                    <div className="flex flex-col items-center gap-0">
+                      <span className="text-gray-400 text-[10px] font-medium mb-0.5">{idx + 1}</span>
                       <button type="button" onClick={() => moveRowUp(row.key)}
                         disabled={idx === 0}
-                        className="text-gray-300 hover:text-gray-600 disabled:opacity-20 leading-none text-base px-1"
+                        className="text-gray-300 hover:text-gray-500 disabled:opacity-20 leading-none text-[10px] px-0.5"
                         title="Subir">▲</button>
                       <button type="button" onClick={() => moveRowDown(row.key)}
                         disabled={idx === rows.length - 1}
-                        className="text-gray-300 hover:text-gray-600 disabled:opacity-20 leading-none text-base px-1"
+                        className="text-gray-300 hover:text-gray-500 disabled:opacity-20 leading-none text-[10px] px-0.5"
                         title="Bajar">▼</button>
                     </div>
                   </td>
@@ -522,20 +522,40 @@ export default function CotizacionForm({
                     </select>
                   </td>
 
-                  {/* Costo unit */}
+                  {/* Costo unit — separador de miles */}
                   <td className="px-3 py-2">
-                    <input type="number" min="0" step="any" value={row.costo_unitario}
-                      onChange={e => updateRow(row.key, { costo_unitario: e.target.value })}
+                    <input
+                      type="text"
+                      inputMode="numeric"
+                      value={
+                        row.costo_unitario
+                          ? Number(row.costo_unitario).toLocaleString('es-CO')
+                          : ''
+                      }
+                      onChange={e => {
+                        const raw = e.target.value.replace(/[^\d]/g, '')
+                        updateRow(row.key, { costo_unitario: raw })
+                      }}
                       placeholder="0"
                       className="w-full px-2 py-1.5 border border-gray-200 rounded text-sm text-right focus:outline-none focus:ring-1 focus:ring-emerald-400"
                     />
                   </td>
 
-                  {/* TRM */}
+                  {/* TRM — separador de miles */}
                   <td className="px-3 py-2">
                     {row.moneda_costo === 'USD' ? (
-                      <input type="number" min="0" step="any" value={row.trm}
-                        onChange={e => updateRow(row.key, { trm: e.target.value })}
+                      <input
+                        type="text"
+                        inputMode="numeric"
+                        value={
+                          row.trm
+                            ? Number(row.trm).toLocaleString('es-CO')
+                            : ''
+                        }
+                        onChange={e => {
+                          const raw = e.target.value.replace(/[^\d]/g, '')
+                          updateRow(row.key, { trm: raw })
+                        }}
                         placeholder="4.200"
                         className="w-full min-w-[130px] px-2 py-1.5 border border-amber-300 bg-amber-50 rounded text-sm text-right focus:outline-none focus:ring-1 focus:ring-amber-400"
                       />
