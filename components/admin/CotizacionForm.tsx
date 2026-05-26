@@ -245,7 +245,11 @@ export default function CotizacionForm({
   })() : ''
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-6">
+    <form
+      onSubmit={handleSubmit}
+      onKeyDown={e => { if (e.key === 'Enter') e.preventDefault() }}
+      className="space-y-6"
+    >
 
       {/* Encabezado */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
@@ -431,10 +435,21 @@ export default function CotizacionForm({
                     />
                   </td>
 
-                  {/* Precio unit */}
+                  {/* Precio unit — texto con separador de miles (puntos COP) */}
                   <td className="px-3 py-2">
-                    <input type="number" min="0" step="any" value={row.precio_unitario}
-                      onChange={e => updateRow(row.key, { precio_unitario: e.target.value })}
+                    <input
+                      type="text"
+                      inputMode="numeric"
+                      value={
+                        row.precio_unitario
+                          ? Number(row.precio_unitario).toLocaleString('es-CO')
+                          : ''
+                      }
+                      onChange={e => {
+                        // Solo dígitos; strip puntos de miles antes de guardar
+                        const raw = e.target.value.replace(/[^\d]/g, '')
+                        updateRow(row.key, { precio_unitario: raw })
+                      }}
                       placeholder="0"
                       className="w-full min-w-[140px] px-2 py-1.5 border border-gray-200 rounded text-sm text-right focus:outline-none focus:ring-1 focus:ring-emerald-400"
                     />
