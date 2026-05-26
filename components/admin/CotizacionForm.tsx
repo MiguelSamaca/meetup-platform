@@ -333,7 +333,7 @@ export default function CotizacionForm({
               <th className="text-left px-3 py-2.5 font-semibold text-gray-600 w-36">Proveedor/Marca</th>
               <th className="text-left px-3 py-2.5 font-semibold text-gray-600">Descripción *</th>
               <th className="text-right px-3 py-2.5 font-semibold text-gray-600 w-40">Cant.</th>
-              <th className="text-right px-3 py-2.5 font-semibold text-gray-600 w-44">Precio unit. (COP)</th>
+              <th className="text-right px-3 py-2.5 font-semibold text-gray-600 w-44">Precio Venta Unit. (COP)</th>
               <th className="text-right px-3 py-2.5 font-semibold text-gray-600 w-20">Desc. %</th>
               <th className="text-right px-3 py-2.5 font-semibold text-gray-600 w-36">Total venta</th>
               <th className="text-center px-3 py-2.5 font-semibold text-gray-600 w-22">Moneda</th>
