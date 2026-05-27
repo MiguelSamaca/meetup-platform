@@ -6,6 +6,31 @@ function fmt(n: number) {
   return n.toLocaleString('es-CO', { minimumFractionDigits: 0, maximumFractionDigits: 0 })
 }
 
+function ProgressBar({ recibidos, pedidos, total }: { recibidos: number; pedidos: number; total: number }) {
+  if (total === 0) return <span className="text-xs text-gray-400">Sin ítems</span>
+  const pctR = (recibidos / total) * 100
+  const pctP = (pedidos   / total) * 100
+  return (
+    <div className="flex items-center gap-2">
+      <div className="w-24 h-2 rounded-full bg-gray-100 overflow-hidden flex">
+        <div className="h-full bg-emerald-400 transition-all" style={{ width: `${pctR}%` }} />
+        <div className="h-full bg-amber-300 transition-all"  style={{ width: `${pctP}%` }} />
+      </div>
+      <span className="text-xs text-gray-500">{recibidos}/{total}</span>
+    </div>
+  )
+}
+
+function PayBadge({ ok, label }: { ok: boolean; label: string }) {
+  return (
+    <span className={`inline-flex items-center gap-1 text-xs font-medium px-2 py-0.5 rounded-full ${
+      ok ? 'bg-emerald-100 text-emerald-700' : 'bg-gray-100 text-gray-500'
+    }`}>
+      {ok ? '✓' : '·'} {label}
+    </span>
+  )
+}
+
 export default async function OrdenesPage() {
   const profile  = await getCurrentProfile()
   const supabase = createAdminClient()
@@ -15,57 +40,50 @@ export default async function OrdenesPage() {
     .select(`
       id, consecutivo, estado, total_cotizacion,
       anticipo_porcentaje, anticipo_monto, anticipo_recibido,
-      saldo_recibido, created_at, completed_at, cotizacion_id,
-      contactos(id, nombre, empresas(nombre)),
+      saldo_recibido, created_at, completed_at,
+      contacto_id,
       oe_items(id, estado)
     `)
     .eq('tenant_id', profile?.tenant_id!)
     .order('created_at', { ascending: false })
 
+  // Cargar contactos por separado para evitar problemas con FK en PostgREST
+  const contactoIds = [...new Set((ordenes ?? []).map(o => o.contacto_id).filter(Boolean))]
+  const { data: contactos } = contactoIds.length > 0
+    ? await supabase
+        .from('contactos')
+        .select('id, nombre, empresas(nombre)')
+        .in('id', contactoIds)
+    : { data: [] }
+
+  const contactoMap = new Map(
+    (contactos ?? []).map(c => [
+      c.id,
+      {
+        nombre:       c.nombre,
+        empresaNombre: (c.empresas as unknown as { nombre: string } | null)?.nombre ?? null,
+      },
+    ])
+  )
+
   const rows = (ordenes ?? []).map(oe => {
-    const items      = (oe.oe_items ?? []) as Array<{ id: string; estado: string }>
-    const total      = items.length
-    const recibidos  = items.filter(i => i.estado === 'recibido').length
-    const pedidos    = items.filter(i => i.estado === 'pedido').length
-    const contacto   = (oe.contactos as unknown as { id: string; nombre: string; empresas: { nombre: string } | null } | null)
-    const saldo      = (oe.total_cotizacion ?? 0) - (oe.anticipo_monto ?? 0)
+    const items     = (oe.oe_items ?? []) as Array<{ id: string; estado: string }>
+    const total     = items.length
+    const recibidos = items.filter(i => i.estado === 'recibido').length
+    const pedidos   = items.filter(i => i.estado === 'pedido').length
+    const contacto  = contactoMap.get(oe.contacto_id ?? '')
+    const saldo     = (oe.total_cotizacion ?? 0) - (oe.anticipo_monto ?? 0)
 
     return {
       ...oe,
-      contactoId:     contacto?.id ?? '',
       contactoNombre: contacto?.nombre ?? '—',
-      empresaNombre:  contacto?.empresas?.nombre ?? null,
+      empresaNombre:  contacto?.empresaNombre ?? null,
       total, recibidos, pedidos, saldo,
     }
   })
 
   const activas     = rows.filter(r => r.estado === 'activa')
   const completadas = rows.filter(r => r.estado === 'completada')
-
-  function ProgressBar({ recibidos, pedidos, total }: { recibidos: number; pedidos: number; total: number }) {
-    if (total === 0) return <span className="text-xs text-gray-400">Sin ítems</span>
-    const pctR = (recibidos / total) * 100
-    const pctP = (pedidos   / total) * 100
-    return (
-      <div className="flex items-center gap-2">
-        <div className="w-24 h-2 rounded-full bg-gray-100 overflow-hidden flex">
-          <div className="h-full bg-emerald-400 transition-all" style={{ width: `${pctR}%` }} />
-          <div className="h-full bg-amber-300 transition-all"  style={{ width: `${pctP}%` }} />
-        </div>
-        <span className="text-xs text-gray-500">{recibidos}/{total}</span>
-      </div>
-    )
-  }
-
-  function PayBadge({ ok, label }: { ok: boolean; label: string }) {
-    return (
-      <span className={`inline-flex items-center gap-1 text-xs font-medium px-2 py-0.5 rounded-full ${
-        ok ? 'bg-emerald-100 text-emerald-700' : 'bg-gray-100 text-gray-500'
-      }`}>
-        {ok ? '✓' : '·'} {label}
-      </span>
-    )
-  }
 
   return (
     <div>
@@ -79,7 +97,9 @@ export default async function OrdenesPage() {
       {rows.length === 0 && (
         <div className="bg-white rounded-xl border border-dashed border-gray-300 py-16 text-center text-gray-400">
           <p className="text-lg mb-1">Sin órdenes todavía</p>
-          <p className="text-sm">Aprueba una cotización y usa el botón <strong>▶ Abrir proyecto</strong></p>
+          <p className="text-sm">
+            Aprueba una cotización y usa el botón <strong>▶ Abrir proyecto</strong>
+          </p>
         </div>
       )}
 
@@ -106,15 +126,22 @@ export default async function OrdenesPage() {
                 {activas.map(r => (
                   <tr key={r.id} className="hover:bg-gray-50 transition-colors">
                     <td className="px-5 py-3 font-mono text-xs font-semibold text-blue-700">
-                      <Link href={`/admin/ordenes/${r.id}`} className="hover:underline">{r.consecutivo}</Link>
+                      <Link href={`/admin/ordenes/${r.id}`} className="hover:underline">
+                        {r.consecutivo}
+                      </Link>
                     </td>
                     <td className="px-5 py-3">
                       <p className="font-medium text-gray-800">{r.contactoNombre}</p>
                       {r.empresaNombre && <p className="text-xs text-gray-400">{r.empresaNombre}</p>}
                     </td>
-                    <td className="px-5 py-3 text-right font-semibold text-gray-900">${fmt(r.total_cotizacion ?? 0)}</td>
+                    <td className="px-5 py-3 text-right font-semibold text-gray-900">
+                      ${fmt(r.total_cotizacion ?? 0)}
+                    </td>
                     <td className="px-5 py-3">
-                      <PayBadge ok={r.anticipo_recibido} label={`${r.anticipo_porcentaje}% · $${fmt(r.anticipo_monto ?? 0)}`} />
+                      <PayBadge
+                        ok={r.anticipo_recibido}
+                        label={`${r.anticipo_porcentaje}% · $${fmt(r.anticipo_monto ?? 0)}`}
+                      />
                     </td>
                     <td className="px-5 py-3">
                       <PayBadge ok={r.saldo_recibido} label={`$${fmt(r.saldo)}`} />
@@ -123,8 +150,10 @@ export default async function OrdenesPage() {
                       <ProgressBar recibidos={r.recibidos} pedidos={r.pedidos} total={r.total} />
                     </td>
                     <td className="px-5 py-3 text-right">
-                      <Link href={`/admin/ordenes/${r.id}`}
-                        className="text-blue-600 hover:underline text-xs font-medium">
+                      <Link
+                        href={`/admin/ordenes/${r.id}`}
+                        className="text-blue-600 hover:underline text-xs font-medium"
+                      >
                         Gestionar →
                       </Link>
                     </td>
@@ -157,19 +186,27 @@ export default async function OrdenesPage() {
                 {completadas.map(r => (
                   <tr key={r.id} className="hover:bg-gray-50 transition-colors">
                     <td className="px-5 py-3 font-mono text-xs font-semibold text-emerald-700">
-                      <Link href={`/admin/ordenes/${r.id}`} className="hover:underline">{r.consecutivo}</Link>
+                      <Link href={`/admin/ordenes/${r.id}`} className="hover:underline">
+                        {r.consecutivo}
+                      </Link>
                     </td>
                     <td className="px-5 py-3">
                       <p className="font-medium text-gray-700">{r.contactoNombre}</p>
                       {r.empresaNombre && <p className="text-xs text-gray-400">{r.empresaNombre}</p>}
                     </td>
-                    <td className="px-5 py-3 text-right font-semibold text-gray-700">${fmt(r.total_cotizacion ?? 0)}</td>
+                    <td className="px-5 py-3 text-right font-semibold text-gray-700">
+                      ${fmt(r.total_cotizacion ?? 0)}
+                    </td>
                     <td className="px-5 py-3 text-xs text-gray-400">
-                      {r.completed_at ? new Date(r.completed_at).toLocaleDateString('es-CO') : '—'}
+                      {r.completed_at
+                        ? new Date(r.completed_at).toLocaleDateString('es-CO')
+                        : '—'}
                     </td>
                     <td className="px-5 py-3 text-right">
-                      <Link href={`/admin/ordenes/${r.id}`}
-                        className="text-gray-400 hover:text-gray-600 text-xs font-medium">
+                      <Link
+                        href={`/admin/ordenes/${r.id}`}
+                        className="text-gray-400 hover:text-gray-600 text-xs font-medium"
+                      >
                         Ver →
                       </Link>
                     </td>

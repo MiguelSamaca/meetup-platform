@@ -17,14 +17,13 @@ export default async function OrdenEjecucionPage({
   const profile  = await getCurrentProfile()
   const supabase = createAdminClient()
 
+  // Cargar OE + ítems
   const { data: oe } = await supabase
     .from('ordenes_ejecucion')
     .select(`
-      id, consecutivo, estado, total_cotizacion, cotizacion_id,
+      id, consecutivo, estado, total_cotizacion, cotizacion_id, contacto_id,
       anticipo_porcentaje, anticipo_monto, anticipo_fecha, anticipo_recibido,
-      saldo_fecha, saldo_recibido, notas, created_at, completed_at,
-      contactos(id, nombre, empresas(nombre)),
-      oe_items(id, proveedor, referencia, descripcion, cantidad, estado, eta, anticipo_proveedor_pagado, orden)
+      saldo_fecha, saldo_recibido, notas, created_at, completed_at
     `)
     .eq('id', oeId)
     .eq('tenant_id', profile?.tenant_id!)
@@ -32,22 +31,44 @@ export default async function OrdenEjecucionPage({
 
   if (!oe) notFound()
 
-  const contacto      = (oe.contactos as unknown as { id: string; nombre: string; empresas: { nombre: string } | null } | null)
-  const empresaNombre = contacto?.empresas?.nombre ?? null
+  // Cargar ítems
+  const { data: oeItems } = await supabase
+    .from('oe_items')
+    .select('id, proveedor, referencia, descripcion, cantidad, estado, eta, anticipo_proveedor_pagado, orden')
+    .eq('orden_ejecucion_id', oeId)
+    .order('orden', { ascending: true })
 
-  const items = ((oe.oe_items ?? []) as Array<{
+  // Cargar contacto
+  const { data: contacto } = await supabase
+    .from('contactos')
+    .select('id, nombre, empresa_id')
+    .eq('id', oe.contacto_id ?? '')
+    .maybeSingle()
+
+  // Cargar empresa si existe
+  let empresaNombre: string | null = null
+  if ((contacto as any)?.empresa_id) {
+    const { data: empresa } = await supabase
+      .from('empresas')
+      .select('nombre')
+      .eq('id', (contacto as any).empresa_id)
+      .maybeSingle()
+    empresaNombre = empresa?.nombre ?? null
+  }
+
+  const items = ((oeItems ?? []) as Array<{
     id: string; proveedor: string | null; referencia: string | null
     descripcion: string; cantidad: number; estado: string
     eta: string | null; anticipo_proveedor_pagado: boolean; orden: number
-  }>).sort((a, b) => a.orden - b.orden)
+  }>)
 
-  const totalItems     = items.length
-  const recibidos      = items.filter(i => i.estado === 'recibido').length
-  const pctRecibidos   = totalItems > 0 ? Math.round((recibidos / totalItems) * 100) : 0
+  const totalItems   = items.length
+  const recibidos    = items.filter(i => i.estado === 'recibido').length
+  const pctRecibidos = totalItems > 0 ? Math.round((recibidos / totalItems) * 100) : 0
 
   return (
     <div>
-      {/* Breadcrumb + título */}
+      {/* Breadcrumb */}
       <div className="flex items-center gap-3 mb-6">
         <Link href="/admin/ordenes" className="text-gray-400 hover:text-gray-600 text-sm">
           ← Órdenes
@@ -61,22 +82,21 @@ export default async function OrdenEjecucionPage({
         }`}>
           {oe.estado === 'completada' ? '✓ Completada' : '● Activa'}
         </span>
-
-        <div className="ml-auto flex items-center gap-4 text-sm">
+        <div className="ml-auto">
           <Link
             href={`/admin/contactos/${contacto?.id}/cotizaciones/${oe.cotizacion_id}`}
-            className="text-gray-400 hover:text-emerald-600 transition-colors"
+            className="text-sm text-gray-400 hover:text-emerald-600 transition-colors"
           >
             Ver cotización →
           </Link>
         </div>
       </div>
 
-      {/* Resumen superior */}
+      {/* Resumen */}
       <div className="bg-white rounded-xl border border-gray-200 p-5 mb-6 grid grid-cols-2 md:grid-cols-5 gap-4 text-sm">
         <div>
           <p className="text-xs text-gray-400 uppercase tracking-wide font-semibold mb-0.5">Contacto</p>
-          <p className="font-semibold text-gray-800">{contacto?.nombre}</p>
+          <p className="font-semibold text-gray-800">{contacto?.nombre ?? '—'}</p>
           {empresaNombre && <p className="text-xs text-gray-500">{empresaNombre}</p>}
         </div>
         <div>
@@ -92,7 +112,9 @@ export default async function OrdenEjecucionPage({
         </div>
         <div>
           <p className="text-xs text-gray-400 uppercase tracking-wide font-semibold mb-0.5">Saldo</p>
-          <p className="font-semibold text-gray-800">${fmt((oe.total_cotizacion ?? 0) - (oe.anticipo_monto ?? 0))}</p>
+          <p className="font-semibold text-gray-800">
+            ${fmt((oe.total_cotizacion ?? 0) - (oe.anticipo_monto ?? 0))}
+          </p>
           <p className={`text-xs mt-0.5 ${oe.saldo_recibido ? 'text-emerald-600' : 'text-amber-600'}`}>
             {oe.saldo_recibido ? '✓ Recibido' : '⏳ Pendiente'}
           </p>
@@ -109,7 +131,7 @@ export default async function OrdenEjecucionPage({
         </div>
       </div>
 
-      {/* Panel interactivo (Client Component) */}
+      {/* Panel interactivo */}
       <OrdenEjecucionPanel
         oe={{
           id:                  oe.id,
