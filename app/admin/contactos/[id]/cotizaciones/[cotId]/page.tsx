@@ -36,7 +36,7 @@ export default async function DetalleCotizacionPage({
       .from('cotizaciones')
       .select(`
         id, consecutivo, estado, notas, created_at,
-        cotizacion_items(id, referencia, proveedor, descripcion, cantidad, precio_unitario, moneda_costo, costo_unitario, trm, orden)
+        cotizacion_items(id, referencia, proveedor, descripcion, cantidad, precio_unitario, descuento, moneda_costo, costo_unitario, trm, orden)
       `)
       .eq('id', cotId)
       .eq('tenant_id', profile?.tenant_id!)
@@ -53,19 +53,23 @@ export default async function DetalleCotizacionPage({
 
   const items = ((cot.cotizacion_items ?? []) as Array<{
     id: string; referencia: string | null; proveedor: string | null; descripcion: string
-    cantidad: number; precio_unitario: number
+    cantidad: number; precio_unitario: number; descuento: number
     moneda_costo: string; costo_unitario: number; trm: number | null; orden: number
   }>).sort((a, b) => a.orden - b.orden)
 
-  let totalPrecio = 0, totalCosto = 0
+  let totalPrecio = 0, totalCosto = 0, totalDescuento = 0
   const rows = items.map(it => {
-    const precioTotal = it.cantidad * it.precio_unitario
+    const desc        = it.descuento ?? 0
+    const precioBase  = it.cantidad * it.precio_unitario
+    const descMonto   = precioBase * desc / 100
+    const precioTotal = precioBase - descMonto          // neto con descuento
     const costoCOP    = it.moneda_costo === 'USD' ? it.costo_unitario * (it.trm ?? 1) : it.costo_unitario
     const costoTotal  = it.cantidad * costoCOP
     const margen      = precioTotal > 0 ? ((precioTotal - costoTotal) / precioTotal) * 100 : 0
-    totalPrecio += precioTotal
-    totalCosto  += costoTotal
-    return { ...it, precioTotal, costoCOP, costoTotal, margen }
+    totalPrecio    += precioTotal
+    totalCosto     += costoTotal
+    totalDescuento += descMonto
+    return { ...it, precioBase, descMonto, precioTotal, desc, costoCOP, costoTotal, margen }
   })
   const margenGlobal      = totalPrecio > 0 ? ((totalPrecio - totalCosto) / totalPrecio) * 100 : 0
   const totalConIva       = totalPrecio * 1.19
@@ -163,6 +167,7 @@ export default async function DetalleCotizacionPage({
               <th className="text-left px-5 py-3 font-semibold text-gray-600">Descripción</th>
               <th className="text-right px-5 py-3 font-semibold text-gray-600">Cant.</th>
               <th className="text-right px-5 py-3 font-semibold text-gray-600">Precio unit.</th>
+              <th className="text-right px-5 py-3 font-semibold text-gray-600">Desc. %</th>
               <th className="text-right px-5 py-3 font-semibold text-gray-600">Total venta</th>
               <th className="text-right px-5 py-3 font-semibold text-gray-600">Costo unit.</th>
               <th className="text-right px-5 py-3 font-semibold text-gray-600">TRM</th>
@@ -178,7 +183,16 @@ export default async function DetalleCotizacionPage({
                 <td className="px-5 py-3 text-gray-800">{r.descripcion}</td>
                 <td className="px-5 py-3 text-right text-gray-700">{r.cantidad}</td>
                 <td className="px-5 py-3 text-right text-gray-700">${fmt(r.precio_unitario)}</td>
-                <td className="px-5 py-3 text-right font-medium text-gray-900">${fmt(r.precioTotal)}</td>
+                <td className="px-5 py-3 text-right">
+                  {r.desc > 0
+                    ? <span className="text-red-500 font-semibold text-xs">{r.desc}%<br/><span className="text-red-400 font-normal">−${fmt(r.descMonto)}</span></span>
+                    : <span className="text-gray-300">—</span>}
+                </td>
+                <td className="px-5 py-3 text-right font-medium">
+                  {r.descMonto > 0
+                    ? <span className="text-emerald-700 font-bold">${fmt(r.precioTotal)}</span>
+                    : <span className="text-gray-900">${fmt(r.precioTotal)}</span>}
+                </td>
                 <td className="px-5 py-3 text-right text-gray-600">
                   {r.moneda_costo === 'USD' ? `USD ${r.costo_unitario.toFixed(2)}` : `$${fmt(r.costo_unitario)}`}
                 </td>
@@ -193,8 +207,9 @@ export default async function DetalleCotizacionPage({
             ))}
           </tbody>
           <tfoot className="border-t-2 border-gray-200">
+            {/* Fila de totales internos: precio neto, costo, margen — 11 cols */}
             <tr className="bg-gray-50">
-              <td colSpan={5} className="px-5 py-2.5 text-xs font-semibold text-gray-500 text-right uppercase tracking-wide">Subtotal productos</td>
+              <td colSpan={6} className="px-5 py-2.5 text-xs font-semibold text-gray-500 text-right uppercase tracking-wide">Subtotal productos</td>
               <td className="px-5 py-2.5 text-right font-bold text-gray-900">${fmt(totalPrecio)}</td>
               <td colSpan={2} />
               <td className="px-5 py-2.5 text-right font-bold text-gray-700">${fmt(totalCosto)}</td>
@@ -202,9 +217,17 @@ export default async function DetalleCotizacionPage({
                 <span className={`text-base font-bold ${mg(margenGlobal)}`}>{margenGlobal.toFixed(1)}%</span>
               </td>
             </tr>
+            {/* Descuento total (si aplica) */}
+            {totalDescuento > 0 && (
+              <tr className="bg-red-50 border-t border-red-100">
+                <td colSpan={5} className="px-5 py-2 text-xs font-semibold text-red-500 text-right uppercase tracking-wide">Descuento total</td>
+                <td className="px-5 py-2 text-right font-semibold text-red-500">−${fmt(totalDescuento)}</td>
+                <td colSpan={5} />
+              </tr>
+            )}
             {/* Costo total equipos vs. total c/IVA */}
             <tr className="bg-blue-50 border-t border-blue-100">
-              <td colSpan={7} className="px-5 py-2.5 text-xs font-semibold text-blue-600 text-right uppercase tracking-wide">
+              <td colSpan={8} className="px-5 py-2.5 text-xs font-semibold text-blue-600 text-right uppercase tracking-wide">
                 Costo total equipos
               </td>
               <td colSpan={2} className="px-5 py-2.5 text-right">
@@ -215,20 +238,21 @@ export default async function DetalleCotizacionPage({
               </td>
               <td />
             </tr>
+            {/* Resumen de precios al cliente */}
             <tr className="bg-emerald-50 border-t border-emerald-100">
-              <td colSpan={4} />
+              <td colSpan={5} />
               <td className="px-5 py-2 text-right text-xs font-semibold text-gray-500 uppercase tracking-wide">SUBTOTAL</td>
               <td className="px-5 py-2 text-right font-semibold text-gray-800">${fmt(totalPrecio)}</td>
               <td colSpan={4} />
             </tr>
             <tr className="bg-emerald-50">
-              <td colSpan={4} />
+              <td colSpan={5} />
               <td className="px-5 py-1.5 text-right text-xs font-semibold text-gray-500 uppercase tracking-wide">IVA 19%</td>
               <td className="px-5 py-1.5 text-right text-gray-600">${fmt(totalPrecio * 0.19)}</td>
               <td colSpan={4} />
             </tr>
             <tr className="bg-emerald-50 border-t-2 border-emerald-200">
-              <td colSpan={4} />
+              <td colSpan={5} />
               <td className="px-5 py-3 text-right text-sm font-bold text-gray-800 uppercase tracking-wide">TOTAL</td>
               <td className="px-5 py-3 text-right text-lg font-bold text-emerald-700">${fmt(totalPrecio * 1.19)}</td>
               <td colSpan={4} />
