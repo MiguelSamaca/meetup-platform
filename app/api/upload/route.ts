@@ -14,12 +14,20 @@ export async function POST(req: NextRequest) {
 
   if (!file) return NextResponse.json({ error: 'Sin archivo' }, { status: 400 })
 
-  const ext    = file.type === 'image/png' ? 'png' : 'jpg'
+  const tiposPermitidos = ['image/jpeg', 'image/png', 'image/webp', 'image/gif', 'application/pdf']
+  if (!tiposPermitidos.includes(file.type)) {
+    return NextResponse.json({ error: 'Tipo de archivo no permitido' }, { status: 400 })
+  }
+
+  const isPdf  = file.type === 'application/pdf'
+  const ext    = isPdf ? 'pdf' : file.type === 'image/png' ? 'png' : 'jpg'
   const buffer = Buffer.from(await file.arrayBuffer())
 
   // Ruta en el bucket
   const path = tipo === 'logo' || tipo === 'banner'
     ? `${profile.tenant_id}/${tipo}.${ext}`
+    : tipo === 'gasto'
+    ? `${profile.tenant_id}/gastos/${Date.now()}.${ext}`
     : `${profile.tenant_id}/productos/${Date.now()}.${ext}`
 
   const admin = createAdminClient()

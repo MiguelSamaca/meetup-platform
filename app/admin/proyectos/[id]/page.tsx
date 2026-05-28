@@ -4,6 +4,7 @@ import { notFound } from 'next/navigation'
 import Link from 'next/link'
 import EtapaRow from '@/components/admin/EtapaRow'
 import DeleteButton from '@/components/admin/DeleteButton'
+import GastosPanel from '@/components/admin/GastosPanel'
 import { ESTADO_PROYECTO_LABEL } from '@/lib/constants'
 import type { Etapa, Evidencia } from '@/lib/types'
 
@@ -18,7 +19,7 @@ export default async function ProyectoDetallePage({ params }: { params: Promise<
   const { id } = await params
   const supabase = createAdminClient()
 
-  const [{ data: proyecto }, { data: etapas }, { data: tickets }] = await Promise.all([
+  const [{ data: proyecto }, { data: etapas }, { data: tickets }, { data: gastos }] = await Promise.all([
     supabase
       .from('proyectos')
       .select('*, profiles(nombre, empresa, email, telefono), orden_ejecucion_id, contacto_id')
@@ -34,6 +35,11 @@ export default async function ProyectoDetallePage({ params }: { params: Promise<
       .select('id, consecutivo, titulo, prioridad, estado, created_at')
       .eq('proyecto_id', id)
       .order('created_at', { ascending: false }),
+    supabase
+      .from('gastos')
+      .select('*')
+      .eq('proyecto_id', id)
+      .order('fecha', { ascending: false }),
   ])
 
   if (!proyecto) notFound()
@@ -154,6 +160,9 @@ export default async function ProyectoDetallePage({ params }: { params: Promise<
               </ul>
             </div>
           )}
+
+          {/* Gastos adicionales */}
+          <GastosPanel proyectoId={id} initialGastos={gastos ?? []} />
         </div>
 
         {/* Sidebar: info */}
