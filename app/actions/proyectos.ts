@@ -119,6 +119,86 @@ export async function eliminarProyecto(id: string) {
   redirect('/admin/proyectos')
 }
 
+/* ─────────────────────────────────────────────────────────────
+   Crear Proyecto desde Orden de Ejecución
+───────────────────────────────────────────────────────────── */
+export async function crearProyectoDesdeOE(oeId: string) {
+  const profile = await requireAdmin()
+  const supabase = createAdminClient()
+
+  // ¿Ya existe un proyecto para esta OE?
+  const { data: existing } = await supabase
+    .from('proyectos')
+    .select('id')
+    .eq('orden_ejecucion_id', oeId)
+    .maybeSingle()
+
+  if (existing) redirect(`/admin/proyectos/${existing.id}`)
+
+  // Leer OE
+  const { data: oe } = await supabase
+    .from('ordenes_ejecucion')
+    .select('id, consecutivo, contacto_id')
+    .eq('id', oeId)
+    .eq('tenant_id', profile.tenant_id!)
+    .single()
+
+  if (!oe) throw new Error('Orden no encontrada')
+
+  // Leer contacto para obtener nombre y empresa
+  const { data: contacto } = await supabase
+    .from('contactos')
+    .select('nombre, empresa_id')
+    .eq('id', oe.contacto_id)
+    .maybeSingle()
+
+  const nombre      = contacto?.nombre ?? oe.consecutivo
+  const empresa_id  = (contacto as any)?.empresa_id ?? null
+  const hoy         = new Date().toISOString().split('T')[0]
+
+  const { data: proyecto, error } = await supabase
+    .from('proyectos')
+    .insert({
+      tenant_id:          profile.tenant_id,
+      orden_ejecucion_id: oeId,
+      contacto_id:        oe.contacto_id,
+      empresa_id,
+      nombre,
+      estado:             'activo',
+      fecha_inicio:       hoy,
+    })
+    .select('id')
+    .single()
+
+  if (error || !proyecto) throw new Error(error?.message ?? 'Error creando proyecto')
+
+  // Auto-crear las 10 etapas AV
+  // Etapa 4 "Compra y logística" ya completada (la OE lo cubrió)
+  await supabase.from('etapas').insert(
+    ETAPAS_AV_CATALOGO.map(e => ({
+      proyecto_id:                  proyecto.id,
+      nombre:                       e.nombre,
+      orden:                        e.orden,
+      requiere_aprobacion_cliente:  e.requiere_aprobacion_cliente,
+      estado:                       e.orden === 4 ? 'completado' : 'pendiente',
+    }))
+  )
+
+  await logAudit({
+    tenantId:   profile.tenant_id,
+    userId:     profile.id,
+    userNombre: profile.nombre,
+    accion:     'crear_proyecto',
+    entidad:    'proyecto',
+    entidadId:  proyecto.id,
+    detalles:   { nombre, oe_id: oeId, desde_oe: true },
+  })
+
+  revalidatePath(`/admin/ordenes/${oeId}`)
+  revalidatePath('/admin/proyectos')
+  redirect(`/admin/proyectos/${proyecto.id}`)
+}
+
 export async function actualizarEtapa(etapaId: string, proyectoId: string, formData: FormData) {
   const supabase     = createAdminClient()
   const estado       = formData.get('estado') as string

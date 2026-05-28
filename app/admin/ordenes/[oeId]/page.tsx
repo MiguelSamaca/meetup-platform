@@ -3,6 +3,7 @@ import { getCurrentProfile } from '@/lib/auth'
 import { notFound } from 'next/navigation'
 import Link from 'next/link'
 import OrdenEjecucionPanel from '@/components/admin/OrdenEjecucionPanel'
+import { crearProyectoDesdeOE } from '@/app/actions/proyectos'
 
 function fmt(n: number) {
   return n.toLocaleString('es-CO', { minimumFractionDigits: 0, maximumFractionDigits: 0 })
@@ -17,7 +18,7 @@ export default async function OrdenEjecucionPage({
   const profile  = await getCurrentProfile()
   const supabase = createAdminClient()
 
-  const [{ data: oe }, { data: oeItems }, { data: oeProveedores }] = await Promise.all([
+  const [{ data: oe }, { data: oeItems }, { data: oeProveedores }, { data: proyectoExistente }] = await Promise.all([
     supabase
       .from('ordenes_ejecucion')
       .select(`
@@ -37,6 +38,11 @@ export default async function OrdenEjecucionPage({
       .from('oe_proveedores')
       .select('proveedor, monto_orden, anticipo_monto')
       .eq('orden_ejecucion_id', oeId),
+    supabase
+      .from('proyectos')
+      .select('id, nombre, estado')
+      .eq('orden_ejecucion_id', oeId)
+      .maybeSingle(),
   ])
 
   if (!oe) notFound()
@@ -87,7 +93,25 @@ export default async function OrdenEjecucionPage({
         <span className="ml-1 text-xs font-semibold px-2.5 py-0.5 rounded-full bg-blue-100 text-blue-700">
           ● Activa
         </span>
-        <div className="ml-auto">
+        <div className="ml-auto flex items-center gap-3">
+          {/* Proyecto vinculado */}
+          {proyectoExistente ? (
+            <Link
+              href={`/admin/proyectos/${proyectoExistente.id}`}
+              className="inline-flex items-center gap-1.5 border border-purple-300 hover:bg-purple-50 text-purple-700 text-sm font-semibold px-4 py-2 rounded-lg transition-colors"
+            >
+              🏗 {proyectoExistente.nombre}
+            </Link>
+          ) : (
+            <form action={crearProyectoDesdeOE.bind(null, oeId)}>
+              <button
+                type="submit"
+                className="inline-flex items-center gap-1.5 bg-purple-500 hover:bg-purple-600 text-white text-sm font-semibold px-4 py-2 rounded-lg transition-colors"
+              >
+                🏗 Iniciar Proyecto
+              </button>
+            </form>
+          )}
           <Link
             href={`/admin/contactos/${contacto?.id}/cotizaciones/${oe.cotizacion_id}`}
             className="text-sm text-gray-400 hover:text-emerald-600 transition-colors"

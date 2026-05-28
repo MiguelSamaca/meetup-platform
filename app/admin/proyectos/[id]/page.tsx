@@ -21,7 +21,7 @@ export default async function ProyectoDetallePage({ params }: { params: Promise<
   const [{ data: proyecto }, { data: etapas }, { data: tickets }] = await Promise.all([
     supabase
       .from('proyectos')
-      .select('*, profiles(nombre, empresa, email, telefono)')
+      .select('*, profiles(nombre, empresa, email, telefono), orden_ejecucion_id, contacto_id')
       .eq('id', id)
       .single(),
     supabase
@@ -37,6 +37,17 @@ export default async function ProyectoDetallePage({ params }: { params: Promise<
   ])
 
   if (!proyecto) notFound()
+
+  // Si viene de una OE, cargar datos de la orden
+  let ordenVinculada: { id: string; consecutivo: string } | null = null
+  if ((proyecto as any).orden_ejecucion_id) {
+    const { data: oe } = await supabase
+      .from('ordenes_ejecucion')
+      .select('id, consecutivo')
+      .eq('id', (proyecto as any).orden_ejecucion_id)
+      .maybeSingle()
+    ordenVinculada = oe ?? null
+  }
 
   const etapasCompletadas = etapas?.filter(e => ['completado', 'aprobado'].includes(e.estado)).length ?? 0
   const totalEtapas = etapas?.length ?? 0
@@ -147,6 +158,21 @@ export default async function ProyectoDetallePage({ params }: { params: Promise<
 
         {/* Sidebar: info */}
         <div className="space-y-4">
+          {/* Link a la OE si viene de una */}
+          {ordenVinculada && (
+            <Link
+              href={`/admin/ordenes/${ordenVinculada.id}`}
+              className="flex items-center gap-2 bg-blue-50 border border-blue-200 rounded-xl p-4 hover:bg-blue-100 transition-colors"
+            >
+              <span className="text-lg">📦</span>
+              <div>
+                <p className="text-xs text-blue-500 font-semibold uppercase tracking-wide">Orden de Ejecución</p>
+                <p className="text-sm font-bold text-blue-700">{ordenVinculada.consecutivo}</p>
+              </div>
+              <span className="ml-auto text-blue-400 text-sm">→</span>
+            </Link>
+          )}
+
           <div className="bg-white rounded-xl border border-gray-200 p-5">
             <h3 className="font-semibold text-gray-800 mb-4">Información del proyecto</h3>
             <dl className="space-y-3 text-sm">
