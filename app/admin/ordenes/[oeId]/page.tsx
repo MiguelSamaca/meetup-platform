@@ -17,35 +17,37 @@ export default async function OrdenEjecucionPage({
   const profile  = await getCurrentProfile()
   const supabase = createAdminClient()
 
-  // Cargar OE + ítems
-  const { data: oe } = await supabase
-    .from('ordenes_ejecucion')
-    .select(`
-      id, consecutivo, estado, total_cotizacion, cotizacion_id, contacto_id,
-      anticipo_porcentaje, anticipo_monto, anticipo_fecha, anticipo_recibido,
-      saldo_fecha, saldo_recibido, notas, created_at, completed_at
-    `)
-    .eq('id', oeId)
-    .eq('tenant_id', profile?.tenant_id!)
-    .single()
+  const [{ data: oe }, { data: oeItems }, { data: oeProveedores }] = await Promise.all([
+    supabase
+      .from('ordenes_ejecucion')
+      .select(`
+        id, consecutivo, estado, total_cotizacion, cotizacion_id, contacto_id,
+        anticipo_porcentaje, anticipo_monto, anticipo_fecha, anticipo_recibido,
+        saldo_fecha, saldo_recibido, notas, created_at, completed_at
+      `)
+      .eq('id', oeId)
+      .eq('tenant_id', profile?.tenant_id!)
+      .single(),
+    supabase
+      .from('oe_items')
+      .select('id, proveedor, referencia, descripcion, cantidad, estado, fecha_solicitud, fecha_entrega, anticipo_proveedor_pagado, orden')
+      .eq('orden_ejecucion_id', oeId)
+      .order('orden', { ascending: true }),
+    supabase
+      .from('oe_proveedores')
+      .select('proveedor, monto_orden, anticipo_monto')
+      .eq('orden_ejecucion_id', oeId),
+  ])
 
   if (!oe) notFound()
 
-  // Cargar ítems
-  const { data: oeItems } = await supabase
-    .from('oe_items')
-    .select('id, proveedor, referencia, descripcion, cantidad, estado, eta, anticipo_proveedor_pagado, orden')
-    .eq('orden_ejecucion_id', oeId)
-    .order('orden', { ascending: true })
-
-  // Cargar contacto
+  // Cargar contacto + empresa por separado
   const { data: contacto } = await supabase
     .from('contactos')
     .select('id, nombre, empresa_id')
     .eq('id', oe.contacto_id ?? '')
     .maybeSingle()
 
-  // Cargar empresa si existe
   let empresaNombre: string | null = null
   if ((contacto as any)?.empresa_id) {
     const { data: empresa } = await supabase
@@ -59,12 +61,17 @@ export default async function OrdenEjecucionPage({
   const items = ((oeItems ?? []) as Array<{
     id: string; proveedor: string | null; referencia: string | null
     descripcion: string; cantidad: number; estado: string
-    eta: string | null; anticipo_proveedor_pagado: boolean; orden: number
+    fecha_solicitud: string | null; fecha_entrega: string | null
+    anticipo_proveedor_pagado: boolean; orden: number
   }>)
 
+  const proveedoresData = (oeProveedores ?? []) as Array<{
+    proveedor: string; monto_orden: number; anticipo_monto: number
+  }>
+
   const totalItems   = items.length
-  const recibidos    = items.filter(i => i.estado === 'recibido').length
-  const pctRecibidos = totalItems > 0 ? Math.round((recibidos / totalItems) * 100) : 0
+  const enBodega     = items.filter(i => i.estado === 'en_bodega').length
+  const pctBodega    = totalItems > 0 ? Math.round((enBodega / totalItems) * 100) : 0
 
   return (
     <div>
@@ -75,12 +82,8 @@ export default async function OrdenEjecucionPage({
         </Link>
         <span className="text-gray-300">/</span>
         <h1 className="text-2xl font-bold text-gray-900">{oe.consecutivo}</h1>
-        <span className={`ml-1 text-xs font-semibold px-2.5 py-0.5 rounded-full ${
-          oe.estado === 'completada'
-            ? 'bg-emerald-100 text-emerald-700'
-            : 'bg-blue-100 text-blue-700'
-        }`}>
-          {oe.estado === 'completada' ? '✓ Completada' : '● Activa'}
+        <span className="ml-1 text-xs font-semibold px-2.5 py-0.5 rounded-full bg-blue-100 text-blue-700">
+          ● Activa
         </span>
         <div className="ml-auto">
           <Link
@@ -102,16 +105,17 @@ export default async function OrdenEjecucionPage({
         <div>
           <p className="text-xs text-gray-400 uppercase tracking-wide font-semibold mb-0.5">Total cotización</p>
           <p className="text-xl font-bold text-gray-900">${fmt(oe.total_cotizacion ?? 0)}</p>
+          <p className="text-xs text-gray-400">Con IVA: ${fmt((oe.total_cotizacion ?? 0) * 1.19)}</p>
         </div>
         <div>
-          <p className="text-xs text-gray-400 uppercase tracking-wide font-semibold mb-0.5">Anticipo</p>
+          <p className="text-xs text-gray-400 uppercase tracking-wide font-semibold mb-0.5">Anticipo cliente</p>
           <p className="font-semibold text-gray-800">${fmt(oe.anticipo_monto ?? 0)}</p>
           <p className={`text-xs mt-0.5 ${oe.anticipo_recibido ? 'text-emerald-600' : 'text-amber-600'}`}>
             {oe.anticipo_recibido ? '✓ Recibido' : '⏳ Pendiente'}
           </p>
         </div>
         <div>
-          <p className="text-xs text-gray-400 uppercase tracking-wide font-semibold mb-0.5">Saldo</p>
+          <p className="text-xs text-gray-400 uppercase tracking-wide font-semibold mb-0.5">Saldo cliente</p>
           <p className="font-semibold text-gray-800">
             ${fmt((oe.total_cotizacion ?? 0) - (oe.anticipo_monto ?? 0))}
           </p>
@@ -120,12 +124,12 @@ export default async function OrdenEjecucionPage({
           </p>
         </div>
         <div>
-          <p className="text-xs text-gray-400 uppercase tracking-wide font-semibold mb-0.5">Equipos recibidos</p>
-          <p className="font-bold text-gray-800">{recibidos}/{totalItems}</p>
+          <p className="text-xs text-gray-400 uppercase tracking-wide font-semibold mb-0.5">En bodega</p>
+          <p className="font-bold text-gray-800">{enBodega}/{totalItems}</p>
           <div className="mt-1 w-full h-1.5 bg-gray-100 rounded-full overflow-hidden">
             <div
               className="h-full bg-emerald-400 rounded-full transition-all"
-              style={{ width: `${pctRecibidos}%` }}
+              style={{ width: `${pctBodega}%` }}
             />
           </div>
         </div>
@@ -145,6 +149,7 @@ export default async function OrdenEjecucionPage({
           saldo_recibido:      oe.saldo_recibido,
         }}
         initialItems={items}
+        initialProveedores={proveedoresData}
       />
     </div>
   )

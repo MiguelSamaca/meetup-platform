@@ -162,7 +162,7 @@ export async function actualizarSaldo(
 export async function actualizarItemEstado(
   oeId:   string,
   itemId: string,
-  estado: 'pendiente' | 'pedido' | 'recibido',
+  estado: 'pendiente' | 'pedido' | 'en_bodega',
   eta?:   string | null
 ) {
   const profile = await requireAdmin()
@@ -204,21 +204,67 @@ export async function actualizarAnticipoProv(
 }
 
 /* ─────────────────────────────────────────────────────────────
-   Actualizar ETA de un ítem
+   Actualizar fechas de un ítem (solicitud y entrega)
 ───────────────────────────────────────────────────────────── */
-export async function actualizarItemEta(
-  oeId:   string,
-  itemId: string,
-  eta:    string | null
+export async function actualizarItemFechas(
+  oeId:            string,
+  itemId:          string,
+  fecha_solicitud: string | null,
+  fecha_entrega:   string | null
 ) {
   const profile = await requireAdmin()
   const admin   = createAdminClient()
 
   await admin
     .from('oe_items')
-    .update({ eta: eta || null })
+    .update({
+      fecha_solicitud: fecha_solicitud || null,
+      fecha_entrega:   fecha_entrega   || null,
+    })
     .eq('id', itemId)
     .eq('orden_ejecucion_id', oeId)
+
+  revalidatePath(`/admin/ordenes/${oeId}`)
+}
+
+/* ─────────────────────────────────────────────────────────────
+   Reordenar ítems (guardar nueva secuencia de orden)
+───────────────────────────────────────────────────────────── */
+export async function reordenarItems(oeId: string, orderedIds: string[]) {
+  const profile = await requireAdmin()
+  const admin   = createAdminClient()
+
+  await Promise.all(
+    orderedIds.map((id, idx) =>
+      admin
+        .from('oe_items')
+        .update({ orden: idx })
+        .eq('id', id)
+        .eq('orden_ejecucion_id', oeId)
+    )
+  )
+
+  revalidatePath(`/admin/ordenes/${oeId}`)
+}
+
+/* ─────────────────────────────────────────────────────────────
+   Actualizar montos financieros por proveedor
+───────────────────────────────────────────────────────────── */
+export async function actualizarProveedorMontos(
+  oeId:          string,
+  proveedor:     string,
+  monto_orden:   number,
+  anticipo_monto: number
+) {
+  const profile = await requireAdmin()
+  const admin   = createAdminClient()
+
+  await admin
+    .from('oe_proveedores')
+    .upsert(
+      { orden_ejecucion_id: oeId, proveedor, monto_orden, anticipo_monto },
+      { onConflict: 'orden_ejecucion_id,proveedor' }
+    )
 
   revalidatePath(`/admin/ordenes/${oeId}`)
 }
