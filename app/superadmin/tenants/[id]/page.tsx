@@ -1,6 +1,7 @@
 import { createAdminClient } from '@/lib/supabase/admin'
 import { notFound } from 'next/navigation'
 import Link from 'next/link'
+import ModulosEditor from '@/components/superadmin/ModulosEditor'
 
 export default async function TenantDetallePage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
@@ -15,7 +16,7 @@ export default async function TenantDetallePage({ params }: { params: Promise<{ 
     { count: ticketsAbiertos },
     { count: totalClientes },
   ] = await Promise.all([
-    supabase.from('tenants').select('*').eq('id', id).single(),
+    supabase.from('tenants').select('*, modulos').eq('id', id).single(),
     supabase.from('profiles').select('id, nombre, email, activo, created_at').eq('tenant_id', id).eq('rol', 'admin'),
     supabase.from('proyectos').select('*', { count: 'exact', head: true }).eq('tenant_id', id),
     supabase.from('proyectos').select('*', { count: 'exact', head: true }).eq('tenant_id', id).eq('estado', 'activo'),
@@ -101,6 +102,15 @@ export default async function TenantDetallePage({ params }: { params: Promise<{ 
           </tbody>
         </table>
       </div>
+
+      {/* Módulos */}
+      <ModulosEditor
+        tenantId={id}
+        modulosActivos={(tenant as any).modulos ?? [
+          'empresas','contactos','clientes',
+          'proyectos','cotizaciones','ordenes','productos','tickets',
+        ]}
+      />
     </div>
   )
 }

@@ -37,6 +37,30 @@ export async function eliminarTenant(tenantId: string) {
   redirect('/superadmin/tenants')
 }
 
+export async function actualizarModulosTenant(tenantId: string, modulos: string[]) {
+  await requireSuperAdmin()
+  const admin = createAdminClient()
+  const { error } = await admin
+    .from('tenants')
+    .update({ modulos, updated_at: new Date().toISOString() })
+    .eq('id', tenantId)
+  if (error) throw new Error(error.message)
+  revalidatePath(`/superadmin/tenants/${tenantId}`)
+  revalidatePath('/superadmin/tenants')
+}
+
+export async function actualizarPlanTenant(tenantId: string, plan: string) {
+  await requireSuperAdmin()
+  const admin = createAdminClient()
+  const { error } = await admin
+    .from('tenants')
+    .update({ plan, updated_at: new Date().toISOString() })
+    .eq('id', tenantId)
+  if (error) throw new Error(error.message)
+  revalidatePath(`/superadmin/tenants/${tenantId}`)
+  revalidatePath('/superadmin/tenants')
+}
+
 // ── Superadmins ───────────────────────────────────────────────────────────────
 
 export async function crearSuperAdmin(formData: FormData) {

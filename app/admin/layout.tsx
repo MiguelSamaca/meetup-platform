@@ -10,15 +10,26 @@ export default async function AdminLayout({ children }: { children: React.ReactN
   if (profile.rol === 'superadmin') redirect('/superadmin')
   if (profile.rol !== 'admin') redirect('/portal')
 
-  // Cargar color primario del integrador
+  // Cargar color primario + módulos del tenant
   const supabase = createAdminClient()
-  const { data: config } = await supabase
-    .from('tenant_config')
-    .select('color_primario')
-    .eq('tenant_id', profile.tenant_id!)
-    .maybeSingle()
+  const [{ data: config }, { data: tenant }] = await Promise.all([
+    supabase
+      .from('tenant_config')
+      .select('color_primario')
+      .eq('tenant_id', profile.tenant_id!)
+      .maybeSingle(),
+    supabase
+      .from('tenants')
+      .select('modulos')
+      .eq('id', profile.tenant_id!)
+      .maybeSingle(),
+  ])
 
   const brandColor = (config as any)?.color_primario ?? '#059669'
+  const modulos: string[] = (tenant as any)?.modulos ?? [
+    'empresas','contactos','clientes',
+    'proyectos','cotizaciones','ordenes','productos','tickets',
+  ]
 
   return (
     <div className="flex min-h-screen bg-gray-50">
@@ -30,7 +41,7 @@ export default async function AdminLayout({ children }: { children: React.ReactN
         }
       `}</style>
 
-      <Sidebar tenantNombre={profile.tenant_nombre} brandColor={brandColor} />
+      <Sidebar tenantNombre={profile.tenant_nombre} brandColor={brandColor} modulos={modulos} />
       <main className="flex-1 overflow-auto">
         <div className="max-w-6xl mx-auto px-6 py-8">
           {children}

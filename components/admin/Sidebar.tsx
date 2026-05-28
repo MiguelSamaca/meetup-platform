@@ -10,31 +10,40 @@ const sections = [
   {
     label: 'CLIENTES',
     items: [
-      { href: '/admin/empresas',  label: 'Empresas',   icon: '⬡' },
-      { href: '/admin/contactos', label: 'Contactos',  icon: '◈' },
-      { href: '/admin/clientes',  label: 'Usuarios',   icon: '◎' },
+      { href: '/admin/empresas',  label: 'Empresas',   icon: '⬡', modulo: 'empresas'  },
+      { href: '/admin/contactos', label: 'Contactos',  icon: '◈', modulo: 'contactos' },
+      { href: '/admin/clientes',  label: 'Usuarios',   icon: '◎', modulo: 'clientes'  },
     ],
   },
   {
     label: 'VENTA',
     items: [
-      { href: '/admin/proyectos',    label: 'Proyectos',    icon: '◫' },
-      { href: '/admin/cotizaciones', label: 'Cotizaciones', icon: '◑' },
-      { href: '/admin/ordenes',      label: 'Órdenes',      icon: '▣' },
-      { href: '/admin/productos',    label: 'Productos',    icon: '▦' },
+      { href: '/admin/proyectos',    label: 'Proyectos',    icon: '◫', modulo: 'proyectos'    },
+      { href: '/admin/cotizaciones', label: 'Cotizaciones', icon: '◑', modulo: 'cotizaciones' },
+      { href: '/admin/ordenes',      label: 'Órdenes',      icon: '▣', modulo: 'ordenes'      },
+      { href: '/admin/productos',    label: 'Productos',    icon: '▦', modulo: 'productos'    },
     ],
   },
   {
     label: 'POST-VENTA',
     items: [
-      { href: '/admin/tickets',   label: 'Tickets',    icon: '◉' },
+      { href: '/admin/tickets', label: 'Tickets', icon: '◉', modulo: 'tickets' },
     ],
   },
 ]
 
 const configNav = { href: '/admin/configuracion', label: 'Configuración', icon: '⚙' }
 
-export default function Sidebar({ tenantNombre, brandColor = '#059669' }: { tenantNombre?: string | null; brandColor?: string }) {
+export default function Sidebar({
+  tenantNombre,
+  brandColor = '#059669',
+  modulos,
+}: {
+  tenantNombre?: string | null
+  brandColor?:   string
+  modulos?:      string[]
+}) {
+  const modulosSet = new Set(modulos ?? [])
   const pathname = usePathname()
   const router   = useRouter()
   const [collapsed, setCollapsed] = useState(false)
@@ -109,29 +118,35 @@ export default function Sidebar({ tenantNombre, brandColor = '#059669' }: { tena
 
       {/* Secciones agrupadas */}
       <nav className="flex-1 px-2 py-3 space-y-4 overflow-y-auto">
-        {sections.map(section => (
-          <div key={section.label}>
-            {!collapsed && (
-              <p className="px-3 mb-1 text-[10px] font-bold tracking-widest text-gray-500 uppercase">
-                {section.label}
-              </p>
-            )}
-            {collapsed && <div className="border-t border-gray-700 my-2" />}
-            <div className="space-y-0.5">
-              {section.items.map(item => {
-                const { style, className } = activeStyle(isActive(item.href))
-                return (
-                  <Link key={item.href} href={item.href} title={item.label} style={style}
-                    className={`flex items-center rounded-lg text-sm font-medium transition-colors ${collapsed ? 'justify-center px-0 py-2.5' : 'gap-3 px-3 py-2.5'} ${className}`}
-                  >
-                    <span className="text-base">{item.icon}</span>
-                    {!collapsed && item.label}
-                  </Link>
-                )
-              })}
+        {sections.map(section => {
+          const visibles = modulos
+            ? section.items.filter(i => modulosSet.has(i.modulo))
+            : section.items
+          if (visibles.length === 0) return null
+          return (
+            <div key={section.label}>
+              {!collapsed && (
+                <p className="px-3 mb-1 text-[10px] font-bold tracking-widest text-gray-500 uppercase">
+                  {section.label}
+                </p>
+              )}
+              {collapsed && <div className="border-t border-gray-700 my-2" />}
+              <div className="space-y-0.5">
+                {visibles.map(item => {
+                  const { style, className } = activeStyle(isActive(item.href))
+                  return (
+                    <Link key={item.href} href={item.href} title={item.label} style={style}
+                      className={`flex items-center rounded-lg text-sm font-medium transition-colors ${collapsed ? 'justify-center px-0 py-2.5' : 'gap-3 px-3 py-2.5'} ${className}`}
+                    >
+                      <span className="text-base">{item.icon}</span>
+                      {!collapsed && item.label}
+                    </Link>
+                  )
+                })}
+              </div>
             </div>
-          </div>
-        ))}
+          )
+        })}
       </nav>
 
       {/* Configuración */}
