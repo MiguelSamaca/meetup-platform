@@ -30,7 +30,7 @@ export default async function OrdenEjecucionPage({
       .single(),
     supabase
       .from('oe_items')
-      .select('id, proveedor, referencia, descripcion, cantidad, estado, fecha_solicitud, fecha_entrega, anticipo_proveedor_pagado, orden')
+      .select('id, proveedor, referencia, descripcion, cantidad, estado, fecha_solicitud, fecha_entrega, anticipo_proveedor_pagado, orden, precio_unitario, descuento, costo_unitario, moneda_costo, trm')
       .eq('orden_ejecucion_id', oeId)
       .order('orden', { ascending: true }),
     supabase
@@ -63,6 +63,8 @@ export default async function OrdenEjecucionPage({
     descripcion: string; cantidad: number; estado: string
     fecha_solicitud: string | null; fecha_entrega: string | null
     anticipo_proveedor_pagado: boolean; orden: number
+    precio_unitario: number; descuento: number
+    costo_unitario: number; moneda_costo: string; trm: number | null
   }>)
 
   const proveedoresData = (oeProveedores ?? []) as Array<{

@@ -31,10 +31,17 @@ export async function crearOrdenEjecucion(cotizacionId: string, contactoId: stri
 
   if (existing) redirect(`/admin/ordenes/${existing.id}`)
 
-  // Leer ítems de la cotización
+  // Leer ítems de la cotización (incluyendo costos)
   const { data: cot } = await admin
     .from('cotizaciones')
-    .select('cotizacion_items(referencia, proveedor, descripcion, cantidad, precio_unitario, descuento, orden)')
+    .select(`
+      cotizacion_items(
+        referencia, proveedor, descripcion, cantidad,
+        precio_unitario, descuento,
+        costo_unitario, moneda_costo, trm,
+        orden
+      )
+    `)
     .eq('id', cotizacionId)
     .eq('tenant_id', profile.tenant_id!)
     .single()
@@ -43,10 +50,12 @@ export async function crearOrdenEjecucion(cotizacionId: string, contactoId: stri
 
   const items = (cot.cotizacion_items ?? []) as Array<{
     referencia: string | null; proveedor: string | null; descripcion: string
-    cantidad: number; precio_unitario: number; descuento: number; orden: number
+    cantidad: number; precio_unitario: number; descuento: number
+    costo_unitario: number; moneda_costo: string; trm: number | null
+    orden: number
   }>
 
-  // Total neto (con descuentos)
+  // Total neto de venta (con descuentos)
   const totalCotizacion = Math.round(
     items.reduce((sum, it) => {
       const bruto = it.cantidad * it.precio_unitario
@@ -92,8 +101,36 @@ export async function crearOrdenEjecucion(cotizacionId: string, contactoId: stri
         referencia:         it.referencia ?? null,
         descripcion:        it.descripcion,
         cantidad:           it.cantidad,
+        precio_unitario:    it.precio_unitario  ?? 0,
+        descuento:          it.descuento        ?? 0,
+        costo_unitario:     it.costo_unitario   ?? 0,
+        moneda_costo:       it.moneda_costo     ?? 'COP',
+        trm:                it.trm              ?? null,
         estado:             'pendiente',
         orden:              it.orden ?? 0,
+      }))
+    )
+  }
+
+  // Auto-crear registros de oe_proveedores con la suma de costos
+  const provCostMap = new Map<string, number>()
+  for (const it of items) {
+    if (!it.proveedor) continue
+    const costoCOP = it.moneda_costo === 'USD'
+      ? it.costo_unitario * (it.trm ?? 1)
+      : it.costo_unitario
+    provCostMap.set(
+      it.proveedor,
+      (provCostMap.get(it.proveedor) ?? 0) + it.cantidad * costoCOP
+    )
+  }
+  if (provCostMap.size > 0) {
+    await admin.from('oe_proveedores').insert(
+      Array.from(provCostMap.entries()).map(([proveedor, monto_orden]) => ({
+        orden_ejecucion_id: oe.id,
+        proveedor,
+        monto_orden:   Math.round(monto_orden),
+        anticipo_monto: 0,
       }))
     )
   }

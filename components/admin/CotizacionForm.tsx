@@ -253,8 +253,10 @@ export default function CotizacionForm({
     acc.costo      += costoTotal
     return acc
   }, { precioBase: 0, descTotal: 0, precio: 0, costo: 0 })
-  const hayDescuento = totales.descTotal > 0
-  const margenGlobal = totales.precio > 0 ? ((totales.precio - totales.costo) / totales.precio) * 100 : 0
+  const hayDescuento     = totales.descTotal > 0
+  const margenGlobal     = totales.precio > 0 ? ((totales.precio - totales.costo) / totales.precio) * 100 : 0
+  const totalConIva      = totales.precio * 1.19
+  const pctCostoSobreIva = totalConIva > 0 ? (totales.costo / totalConIva) * 100 : 0
   const mgColor = (m: number) =>
     m >= 30 ? 'text-emerald-600' :
     m >= 15 ? 'text-amber-500'  :
@@ -642,6 +644,19 @@ export default function CotizacionForm({
                 <span className={`text-base font-bold ${mgColor(margenGlobal)}`}>{margenGlobal.toFixed(1)}%</span>
               </td>
               <td />
+            </tr>
+            {/* Costo total equipos vs. total c/IVA */}
+            <tr className="bg-blue-50 border-t border-blue-100">
+              <td colSpan={11} className="px-3 py-2.5 text-xs font-semibold text-blue-600 text-right uppercase tracking-wide">
+                Costo total equipos
+              </td>
+              <td className="px-3 py-2.5 text-right">
+                <p className="font-bold text-blue-700">${fmt(totales.costo)}</p>
+                <p className="text-xs text-blue-500 mt-0.5">
+                  {pctCostoSobreIva.toFixed(1)}% del total c/IVA
+                </p>
+              </td>
+              <td colSpan={3} />
             </tr>
             {/* Subtotal bruto (solo si hay algún descuento) */}
             {hayDescuento && (

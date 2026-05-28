@@ -67,8 +67,10 @@ export default async function DetalleCotizacionPage({
     totalCosto  += costoTotal
     return { ...it, precioTotal, costoCOP, costoTotal, margen }
   })
-  const margenGlobal  = totalPrecio > 0 ? ((totalPrecio - totalCosto) / totalPrecio) * 100 : 0
-  const empresaNombre = (contacto.empresas as unknown as { nombre: string } | null)?.nombre
+  const margenGlobal      = totalPrecio > 0 ? ((totalPrecio - totalCosto) / totalPrecio) * 100 : 0
+  const totalConIva       = totalPrecio * 1.19
+  const pctCostoSobreIva  = totalConIva > 0 ? (totalCosto / totalConIva) * 100 : 0
+  const empresaNombre     = (contacto.empresas as unknown as { nombre: string } | null)?.nombre
 
   const mg = (m: number) => m >= 30 ? 'text-emerald-600' : m >= 15 ? 'text-amber-600' : 'text-red-500'
 
@@ -199,6 +201,19 @@ export default async function DetalleCotizacionPage({
               <td className="px-5 py-2.5 text-right">
                 <span className={`text-base font-bold ${mg(margenGlobal)}`}>{margenGlobal.toFixed(1)}%</span>
               </td>
+            </tr>
+            {/* Costo total equipos vs. total c/IVA */}
+            <tr className="bg-blue-50 border-t border-blue-100">
+              <td colSpan={7} className="px-5 py-2.5 text-xs font-semibold text-blue-600 text-right uppercase tracking-wide">
+                Costo total equipos
+              </td>
+              <td colSpan={2} className="px-5 py-2.5 text-right">
+                <p className="font-bold text-blue-700 text-base">${fmt(totalCosto)}</p>
+                <p className="text-xs text-blue-500 mt-0.5">
+                  {pctCostoSobreIva.toFixed(1)}% del total c/IVA (${fmt(totalConIva)})
+                </p>
+              </td>
+              <td />
             </tr>
             <tr className="bg-emerald-50 border-t border-emerald-100">
               <td colSpan={4} />
