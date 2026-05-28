@@ -350,8 +350,8 @@ export default function OrdenEjecucionPanel({ oe, initialItems, initialProveedor
       </div>
 
       {/* ── Sección 2: Equipos por proveedor ── */}
-      <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
-        <div className="px-5 py-3 bg-gray-50 border-b border-gray-200 flex items-center justify-between">
+      <div>
+        <div className="flex items-center justify-between mb-3">
           <div className="flex items-center gap-2">
             <span>📦</span>
             <h2 className="font-semibold text-gray-800">Pedidos a proveedores</h2>
@@ -361,7 +361,7 @@ export default function OrdenEjecucionPanel({ oe, initialItems, initialProveedor
           </span>
         </div>
 
-        <div className="divide-y divide-gray-100">
+        <div className="space-y-4">
           {syncedOrder.map((provKey, groupIdx) => {
             const groupItems = gruposMap.get(provKey)
             if (!groupItems) return null
@@ -371,65 +371,75 @@ export default function OrdenEjecucionPanel({ oe, initialItems, initialProveedor
             const anticipoPagado = groupItems.every(i => i.anticipo_proveedor_pagado)
             const todosEnBodega  = groupItems.every(i => i.estado === 'en_bodega')
 
-            const provData       = esSinProv ? null : getProvData(provKey)
-            const montoOrden     = provData ? parseFmt(provData.monto_orden)    : 0
-            const anticipoGirado = provData ? parseFmt(provData.anticipo_monto) : 0
-            const faltaPagar     = Math.max(0, montoOrden - anticipoGirado)
+            // Costo total calculado desde los ítems
+            const costoCalculado = groupItems.reduce((sum, it) => {
+              const cop = it.moneda_costo === 'USD' ? it.costo_unitario * (it.trm ?? 1) : it.costo_unitario
+              return sum + it.cantidad * cop
+            }, 0)
+
+            const provData        = esSinProv ? null : getProvData(provKey)
+            const montoOrden      = provData ? parseFmt(provData.monto_orden)    : 0
+            const anticipoGirado  = provData ? parseFmt(provData.anticipo_monto) : 0
+            const faltaPagar      = Math.max(0, montoOrden - anticipoGirado)
             const pctAnticipoProv = montoOrden > 0 ? Math.round((anticipoGirado / montoOrden) * 100) : 0
 
             return (
-              <div key={provKey} className={todosEnBodega ? 'bg-emerald-50/40' : ''}>
+              <div
+                key={provKey}
+                className={`rounded-xl border overflow-hidden shadow-sm ${
+                  todosEnBodega
+                    ? 'border-emerald-200 bg-emerald-50/30'
+                    : 'border-gray-200 bg-white'
+                }`}
+              >
+                {/* ── Cabecera del proveedor ── */}
+                <div className={`px-5 py-3 border-b flex flex-wrap items-start gap-4 ${
+                  todosEnBodega ? 'bg-emerald-100/40 border-emerald-200' : 'bg-gray-50 border-gray-200'
+                }`}>
 
-                {/* Cabecera del grupo */}
-                <div className="px-5 py-4 flex flex-wrap items-start gap-4">
-
-                  {/* ▲▼ reorder grupo + nombre */}
-                  <div className="flex items-center gap-2 min-w-[160px]">
-                    {/* Flechas grupo */}
+                  {/* ▲▼ + nombre + costo total */}
+                  <div className="flex items-center gap-2">
                     <div className="flex flex-col gap-0.5 shrink-0">
-                      <button
-                        type="button"
-                        onClick={() => moveGroup(provKey, 'up')}
+                      <button type="button" onClick={() => moveGroup(provKey, 'up')}
                         disabled={groupIdx === 0}
                         className="text-gray-300 hover:text-gray-600 disabled:opacity-20 text-[11px] leading-none px-0.5"
-                        title="Subir proveedor"
-                      >▲</button>
-                      <button
-                        type="button"
-                        onClick={() => moveGroup(provKey, 'down')}
+                        title="Subir proveedor">▲</button>
+                      <button type="button" onClick={() => moveGroup(provKey, 'down')}
                         disabled={groupIdx === syncedOrder.length - 1}
                         className="text-gray-300 hover:text-gray-600 disabled:opacity-20 text-[11px] leading-none px-0.5"
-                        title="Bajar proveedor"
-                      >▼</button>
+                        title="Bajar proveedor">▼</button>
                     </div>
 
                     <div>
-                      <span className={`text-xs font-bold uppercase tracking-widest ${esSinProv ? 'text-gray-400' : 'text-gray-700'}`}>
-                        {esSinProv ? 'Sin proveedor' : provKey}
-                      </span>
-                      <div className="flex items-center gap-2 mt-0.5">
+                      <div className="flex items-center gap-2">
+                        <span className={`text-sm font-bold uppercase tracking-widest ${esSinProv ? 'text-gray-400' : 'text-gray-800'}`}>
+                          {esSinProv ? 'Sin proveedor' : provKey}
+                        </span>
                         <span className="text-xs text-gray-400">{groupItems.length} ítem{groupItems.length !== 1 ? 's' : ''}</span>
                         {todosEnBodega && (
-                          <span className="text-xs font-semibold text-emerald-600 bg-emerald-100 px-2 py-0.5 rounded-full">
-                            ✓ En bodega
-                          </span>
+                          <span className="text-xs font-semibold text-emerald-600 bg-emerald-100 px-2 py-0.5 rounded-full">✓ En bodega</span>
                         )}
                       </div>
+                      {/* Costo total calculado */}
+                      {costoCalculado > 0 && (
+                        <p className="text-xs text-gray-500 mt-0.5">
+                          Costo equipos: <span className="font-bold text-gray-700">${fmt(Math.round(costoCalculado))}</span>
+                        </p>
+                      )}
                     </div>
                   </div>
 
-                  {/* Montos financieros (solo si tiene proveedor) */}
+                  {/* Montos financieros */}
                   {!esSinProv && provData !== null && (
                     <div className="flex flex-wrap items-end gap-3 flex-1">
 
-                      {/* Monto orden de compra */}
+                      {/* Monto orden compra */}
                       <div>
                         <p className="text-[10px] text-gray-400 uppercase tracking-wide mb-1">Monto orden compra</p>
                         <div className="relative flex items-center">
                           <span className="absolute left-2.5 text-gray-400 text-xs">$</span>
                           <input
-                            type="text"
-                            inputMode="numeric"
+                            type="text" inputMode="numeric"
                             value={provData.monto_orden ? Number(parseFmt(provData.monto_orden)).toLocaleString('es-CO') : ''}
                             onChange={e => setProvField(provKey, 'monto_orden', e.target.value)}
                             onBlur={() => saveProvMontos(provKey)}
@@ -439,13 +449,12 @@ export default function OrdenEjecucionPanel({ oe, initialItems, initialProveedor
                         </div>
                       </div>
 
-                      {/* Anticipo girado — % input */}
+                      {/* Anticipo % */}
                       <div>
                         <p className="text-[10px] text-gray-400 uppercase tracking-wide mb-1">Anticipo %</p>
                         <div className="relative flex items-center">
                           <input
-                            type="text"
-                            inputMode="numeric"
+                            type="text" inputMode="numeric"
                             value={provData.anticipo_pct}
                             onChange={e => setProvField(provKey, 'anticipo_pct', e.target.value)}
                             onBlur={() => saveProvMontos(provKey)}
@@ -456,14 +465,13 @@ export default function OrdenEjecucionPanel({ oe, initialItems, initialProveedor
                         </div>
                       </div>
 
-                      {/* Anticipo girado — $ input */}
+                      {/* Anticipo $ */}
                       <div>
                         <p className="text-[10px] text-gray-400 uppercase tracking-wide mb-1">Anticipo girado $</p>
                         <div className="relative flex items-center">
                           <span className="absolute left-2.5 text-gray-400 text-xs">$</span>
                           <input
-                            type="text"
-                            inputMode="numeric"
+                            type="text" inputMode="numeric"
                             value={provData.anticipo_monto ? Number(parseFmt(provData.anticipo_monto)).toLocaleString('es-CO') : ''}
                             onChange={e => setProvField(provKey, 'anticipo_monto', e.target.value)}
                             onBlur={() => saveProvMontos(provKey)}
@@ -473,26 +481,22 @@ export default function OrdenEjecucionPanel({ oe, initialItems, initialProveedor
                         </div>
                       </div>
 
-                      {/* Resumen falta */}
+                      {/* Falta por girar */}
                       {montoOrden > 0 && (
                         <div className="pb-1">
                           <p className="text-[10px] text-gray-400 uppercase tracking-wide mb-1">Falta por girar</p>
                           <div className="flex items-baseline gap-2">
                             <span className="font-bold text-gray-800 text-sm">${fmt(faltaPagar)}</span>
                             <span className={`text-xs font-semibold px-1.5 py-0.5 rounded-full ${
-                              pctAnticipoProv >= 100
-                                ? 'bg-emerald-100 text-emerald-700'
-                                : pctAnticipoProv >= 50
-                                ? 'bg-amber-100 text-amber-700'
-                                : 'bg-gray-100 text-gray-500'
-                            }`}>
-                              {pctAnticipoProv}% girado
-                            </span>
+                              pctAnticipoProv >= 100 ? 'bg-emerald-100 text-emerald-700'
+                              : pctAnticipoProv >= 50 ? 'bg-amber-100 text-amber-700'
+                              : 'bg-gray-100 text-gray-500'
+                            }`}>{pctAnticipoProv}% girado</span>
                           </div>
                         </div>
                       )}
 
-                      {/* Toggle anticipo confirmado */}
+                      {/* Toggle anticipo */}
                       <div className="pb-1">
                         <button
                           type="button"
@@ -503,11 +507,9 @@ export default function OrdenEjecucionPanel({ oe, initialItems, initialProveedor
                               : 'bg-gray-100 text-gray-500 hover:bg-gray-200'
                           }`}
                         >
-                          <span className={`w-3.5 h-3.5 rounded border-2 flex items-center justify-center text-[9px] flex-shrink-0 ${
+                          <span className={`w-3.5 h-3.5 rounded border-2 flex items-center justify-center text-[9px] shrink-0 ${
                             anticipoPagado ? 'border-emerald-500 bg-emerald-500 text-white' : 'border-gray-300'
-                          }`}>
-                            {anticipoPagado && '✓'}
-                          </span>
+                          }`}>{anticipoPagado && '✓'}</span>
                           Anticipo confirmado
                         </button>
                       </div>
@@ -515,70 +517,68 @@ export default function OrdenEjecucionPanel({ oe, initialItems, initialProveedor
                   )}
                 </div>
 
-                {/* Ítems del grupo */}
-                <div className="border-t border-gray-100">
-                  {groupItems.map(item => (
-                    <div
-                      key={item.id}
-                      className={`px-5 py-3 border-b border-gray-50 last:border-0 ${
-                        item.estado === 'en_bodega' ? 'opacity-60' : ''
-                      }`}
-                    >
-                      <div className="flex flex-wrap items-center gap-3">
+                {/* ── Ítems del grupo ── */}
+                <div className="divide-y divide-gray-100">
+                  {groupItems.map(item => {
+                    const costoCOP  = item.moneda_costo === 'USD' ? item.costo_unitario * (item.trm ?? 1) : item.costo_unitario
+                    const costoItem = Math.round(item.cantidad * costoCOP)
 
-                        {/* Referencia + descripción */}
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-center gap-2">
+                    return (
+                      <div
+                        key={item.id}
+                        className={`px-5 py-3 ${item.estado === 'en_bodega' ? 'opacity-60' : ''}`}
+                      >
+                        <div className="flex flex-wrap items-center gap-3">
+
+                          {/* Referencia + costo (sin descripción) */}
+                          <div className="flex items-center gap-3 flex-1 min-w-0">
                             <span className="text-gray-400 text-xs font-semibold shrink-0">×{item.cantidad}</span>
-                            {item.referencia ? (
-                              <p className="text-sm font-bold text-gray-800 font-mono shrink-0">{item.referencia}</p>
-                            ) : null}
-                            <p className={`text-sm truncate ${item.referencia ? 'text-gray-500 font-normal' : 'font-medium text-gray-800'}`}>
-                              {item.descripcion}
+                            <p className="text-sm font-bold text-gray-800 font-mono">
+                              {item.referencia ?? <span className="text-gray-400 font-normal italic text-xs">Sin ref.</span>}
                             </p>
+                            {costoItem > 0 && (
+                              <span className="text-xs font-semibold text-blue-600 bg-blue-50 px-2 py-0.5 rounded-full shrink-0">
+                                ${fmt(costoItem)}
+                              </span>
+                            )}
+                          </div>
+
+                          {/* Estado */}
+                          <div className="flex rounded-lg overflow-hidden border border-gray-200 text-xs shrink-0">
+                            {ESTADOS.map(s => (
+                              <button key={s} type="button"
+                                onClick={() => handleItemEstado(item.id, s)}
+                                className={`px-3 py-1.5 font-medium transition-colors ${
+                                  item.estado === s ? ESTADO_ACTIVE[s] : ESTADO_INACTIVE
+                                }`}>
+                                {ESTADO_LABEL[s]}
+                              </button>
+                            ))}
+                          </div>
+
+                          {/* Fecha solicitud */}
+                          <div className="shrink-0">
+                            <p className="text-[9px] text-gray-400 uppercase tracking-wide mb-0.5">Solicitud</p>
+                            <input type="date"
+                              value={item.fecha_solicitud ?? ''}
+                              onChange={e => handleFechaSolicitud(item.id, e.target.value)}
+                              className="px-2 py-1 border border-dashed border-gray-300 rounded text-xs text-gray-500 focus:outline-none focus:ring-1 focus:ring-emerald-400 focus:border-solid w-34"
+                            />
+                          </div>
+
+                          {/* Fecha entrega */}
+                          <div className="shrink-0">
+                            <p className="text-[9px] text-gray-400 uppercase tracking-wide mb-0.5">Entrega en bodega</p>
+                            <input type="date"
+                              value={item.fecha_entrega ?? ''}
+                              onChange={e => handleFechaEntrega(item.id, e.target.value)}
+                              className="px-2 py-1 border border-dashed border-gray-300 rounded text-xs text-gray-500 focus:outline-none focus:ring-1 focus:ring-amber-400 focus:border-solid w-34"
+                            />
                           </div>
                         </div>
-
-                        {/* Estado */}
-                        <div className="flex rounded-lg overflow-hidden border border-gray-200 text-xs shrink-0">
-                          {ESTADOS.map(s => (
-                            <button
-                              key={s}
-                              type="button"
-                              onClick={() => handleItemEstado(item.id, s)}
-                              className={`px-3 py-1.5 font-medium transition-colors ${
-                                item.estado === s ? ESTADO_ACTIVE[s] : ESTADO_INACTIVE
-                              }`}
-                            >
-                              {ESTADO_LABEL[s]}
-                            </button>
-                          ))}
-                        </div>
-
-                        {/* Fecha solicitud */}
-                        <div className="shrink-0">
-                          <p className="text-[9px] text-gray-400 uppercase tracking-wide mb-0.5">Solicitud</p>
-                          <input
-                            type="date"
-                            value={item.fecha_solicitud ?? ''}
-                            onChange={e => handleFechaSolicitud(item.id, e.target.value)}
-                            className="px-2 py-1 border border-dashed border-gray-300 rounded text-xs text-gray-500 focus:outline-none focus:ring-1 focus:ring-emerald-400 focus:border-solid w-34"
-                          />
-                        </div>
-
-                        {/* Fecha entrega */}
-                        <div className="shrink-0">
-                          <p className="text-[9px] text-gray-400 uppercase tracking-wide mb-0.5">Entrega en bodega</p>
-                          <input
-                            type="date"
-                            value={item.fecha_entrega ?? ''}
-                            onChange={e => handleFechaEntrega(item.id, e.target.value)}
-                            className="px-2 py-1 border border-dashed border-gray-300 rounded text-xs text-gray-500 focus:outline-none focus:ring-1 focus:ring-amber-400 focus:border-solid w-34"
-                          />
-                        </div>
                       </div>
-                    </div>
-                  ))}
+                    )
+                  })}
                 </div>
               </div>
             )
