@@ -90,3 +90,70 @@ export async function eliminarProducto(id: string) {
 
   revalidatePath('/admin/productos')
 }
+
+export type FilaProductoImport = {
+  referencia:  string | null
+  proveedor:   string | null
+  descripcion: string
+  unidad:      string
+}
+
+export async function importarProductos(
+  filas: FilaProductoImport[]
+): Promise<{ insertados: number; errores: string[] }> {
+  const profile = await requireAdmin()
+  const admin   = createAdminClient()
+
+  const UNIDADES_VALIDAS = ['und', 'm', 'm2', 'kg', 'gl', 'hr', 'kit']
+  const errores: string[] = []
+  const rows: {
+    tenant_id:   string
+    referencia:  string | null
+    proveedor:   string | null
+    descripcion: string
+    unidad:      string
+    activo:      boolean
+  }[] = []
+
+  for (let i = 0; i < filas.length; i++) {
+    const f = filas[i]
+    const rowNum = i + 2 // fila 1 = encabezado
+
+    if (!f.descripcion?.trim()) {
+      errores.push(`Fila ${rowNum}: descripción vacía — omitida`)
+      continue
+    }
+
+    const unidad = UNIDADES_VALIDAS.includes(f.unidad?.trim().toLowerCase())
+      ? f.unidad.trim().toLowerCase()
+      : 'und'
+
+    rows.push({
+      tenant_id:   profile.tenant_id!,
+      referencia:  f.referencia?.trim() || null,
+      proveedor:   f.proveedor?.trim()  || null,
+      descripcion: f.descripcion.trim(),
+      unidad,
+      activo: true,
+    })
+  }
+
+  if (rows.length === 0) {
+    return { insertados: 0, errores: errores.length ? errores : ['No hay filas válidas para importar'] }
+  }
+
+  const { error } = await admin.from('productos').insert(rows)
+  if (error) throw new Error(error.message)
+
+  await logAudit({
+    tenantId:   profile.tenant_id,
+    userId:     profile.id,
+    userNombre: profile.nombre,
+    accion:     'importar_productos',
+    entidad:    'producto',
+    detalles:   { insertados: rows.length },
+  })
+
+  revalidatePath('/admin/productos')
+  return { insertados: rows.length, errores }
+}

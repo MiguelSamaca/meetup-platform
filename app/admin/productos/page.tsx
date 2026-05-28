@@ -3,6 +3,7 @@ import { getCurrentProfile } from '@/lib/auth'
 import { eliminarProducto } from '@/app/actions/productos'
 import Link from 'next/link'
 import DeleteButton from '@/components/admin/DeleteButton'
+import ImportarProductosBtn from '@/components/admin/ImportarProductosBtn'
 
 export default async function ProductosPage() {
   const profile  = await getCurrentProfile()
@@ -23,12 +24,15 @@ export default async function ProductosPage() {
             Productos guardados para reutilizar en cotizaciones. El costo siempre se ingresa al momento de cotizar.
           </p>
         </div>
-        <Link
-          href="/admin/productos/nuevo"
-          className="bg-emerald-500 hover:bg-emerald-600 text-white text-sm font-semibold px-4 py-2 rounded-lg transition-colors"
-        >
-          + Nuevo producto
-        </Link>
+        <div className="flex items-center gap-2">
+          <ImportarProductosBtn />
+          <Link
+            href="/admin/productos/nuevo"
+            className="bg-emerald-500 hover:bg-emerald-600 text-white text-sm font-semibold px-4 py-2 rounded-lg transition-colors"
+          >
+            + Nuevo producto
+          </Link>
+        </div>
       </div>
 
       <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
