@@ -153,15 +153,35 @@ export default function OrdenEjecucionPanel({ oe, initialItems, initialProveedor
   }
 
   const [provMap, setProvMap] = useState<Map<string, ProvState>>(() => {
+    // Pre-calcular costo total por proveedor desde los ítems
+    const itemCostMap = new Map<string, number>()
+    for (const item of initialItems) {
+      if (!item.proveedor) continue
+      const cop  = item.moneda_costo === 'USD' ? item.costo_unitario * (item.trm ?? 1) : item.costo_unitario
+      const cost = item.cantidad * cop
+      itemCostMap.set(item.proveedor, (itemCostMap.get(item.proveedor) ?? 0) + cost)
+    }
+
     const m = new Map<string, ProvState>()
     for (const p of initialProveedores) {
-      const mo = p.monto_orden    > 0 ? String(p.monto_orden)    : ''
+      const calcCost = Math.round(itemCostMap.get(p.proveedor) ?? 0)
+      // Usar el costo guardado, o si es 0 usar el calculado de los ítems
+      const mo = p.monto_orden    > 0 ? String(p.monto_orden)    : calcCost > 0 ? String(calcCost) : ''
       const am = p.anticipo_monto > 0 ? String(p.anticipo_monto) : ''
-      const ap = mo && am
-        ? String(Math.round((p.anticipo_monto / p.monto_orden) * 100))
+      const moNum = parseFloat(mo) || 0
+      const ap = moNum > 0 && p.anticipo_monto > 0
+        ? String(Math.round((p.anticipo_monto / moNum) * 100))
         : ''
       m.set(p.proveedor, { monto_orden: mo, anticipo_monto: am, anticipo_pct: ap })
     }
+
+    // Agregar proveedores que tienen ítems pero no registro en oe_proveedores aún
+    for (const [prov, cost] of itemCostMap) {
+      if (!m.has(prov) && cost > 0) {
+        m.set(prov, { monto_orden: String(Math.round(cost)), anticipo_monto: '', anticipo_pct: '' })
+      }
+    }
+
     return m
   })
 
