@@ -505,14 +505,7 @@ export default function OrdenEjecucionPanel({ oe, initialItems, initialProveedor
                       {montoOrden > 0 && (
                         <div className="pb-1">
                           <p className="text-[10px] text-gray-400 uppercase tracking-wide mb-1">Falta por girar</p>
-                          <div className="flex items-baseline gap-2">
-                            <span className="font-bold text-gray-800 text-sm">${fmt(faltaPagar)}</span>
-                            <span className={`text-xs font-semibold px-1.5 py-0.5 rounded-full ${
-                              pctAnticipoProv >= 100 ? 'bg-emerald-100 text-emerald-700'
-                              : pctAnticipoProv >= 50 ? 'bg-amber-100 text-amber-700'
-                              : 'bg-gray-100 text-gray-500'
-                            }`}>{pctAnticipoProv}% girado</span>
-                          </div>
+                          <span className="font-bold text-gray-800 text-sm">${fmt(faltaPagar)}</span>
                         </div>
                       )}
 
@@ -550,17 +543,15 @@ export default function OrdenEjecucionPanel({ oe, initialItems, initialProveedor
                       >
                         <div className="flex flex-wrap items-center gap-3">
 
-                          {/* Referencia + costo (sin descripción) */}
-                          <div className="flex items-center gap-3 flex-1 min-w-0">
-                            <span className="text-gray-400 text-xs font-semibold shrink-0">×{item.cantidad}</span>
-                            <p className="text-sm font-bold text-gray-800 font-mono">
+                          {/* Cantidad + Referencia (ancho fijo) + Costo alineado */}
+                          <div className="flex items-center gap-3 w-72 shrink-0">
+                            <span className="text-gray-400 text-xs font-semibold w-5 shrink-0 text-right">×{item.cantidad}</span>
+                            <p className="text-sm font-bold text-gray-800 font-mono flex-1 truncate">
                               {item.referencia ?? <span className="text-gray-400 font-normal italic text-xs">Sin ref.</span>}
                             </p>
-                            {costoItem > 0 && (
-                              <span className="text-xs font-semibold text-blue-600 bg-blue-50 px-2 py-0.5 rounded-full shrink-0">
-                                ${fmt(costoItem)}
-                              </span>
-                            )}
+                            <span className="text-xs font-semibold text-blue-700 w-28 text-right shrink-0">
+                              {costoItem > 0 ? `$${fmt(costoItem)}` : '—'}
+                            </span>
                           </div>
 
                           {/* Estado */}
