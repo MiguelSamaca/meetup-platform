@@ -15,11 +15,11 @@ SET
   trm             = ci.trm,
   precio_unitario = ci.precio_unitario,
   descuento       = COALESCE(ci.descuento, 0)
-FROM public.ordenes_ejecucion oe
-JOIN public.cotizacion_items ci
-  ON  ci.cotizacion_id = oe.cotizacion_id
-  AND ci.orden         = oi.orden
+FROM public.ordenes_ejecucion oe,
+     public.cotizacion_items ci
 WHERE oi.orden_ejecucion_id = oe.id
+  AND ci.cotizacion_id      = oe.cotizacion_id
+  AND ci.orden              = oi.orden
   AND (oi.costo_unitario IS NULL OR oi.costo_unitario = 0);
 
 -- Auto-crear / actualizar oe_proveedores con los costos reales por proveedor
