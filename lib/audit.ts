@@ -32,6 +32,9 @@ export type AuditAccion =
   | 'activar_tenant'
   | 'crear_orden_ejecucion'
   | 'completar_orden_ejecucion'
+  | 'importar_productos'
+  | 'eliminar_producto'
+  | 'importar_gastos'
 
 interface AuditParams {
   tenantId?:   string | null
