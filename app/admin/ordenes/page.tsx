@@ -35,19 +35,35 @@ export default async function OrdenesPage() {
   const profile  = await getCurrentProfile()
   const supabase = createAdminClient()
 
+  // Separamos oe_items en query aparte — PostgREST a veces no resuelve el FK embebido
   const { data: ordenes } = await supabase
     .from('ordenes_ejecucion')
     .select(`
       id, consecutivo, estado, total_cotizacion,
       anticipo_porcentaje, anticipo_monto, anticipo_recibido,
       saldo_recibido, created_at, completed_at,
-      contacto_id,
-      oe_items(id, estado)
+      contacto_id
     `)
     .eq('tenant_id', profile?.tenant_id!)
     .order('created_at', { ascending: false })
 
-  // Cargar contactos por separado para evitar problemas con FK en PostgREST
+  // Items por orden (query separada)
+  const oeIds = (ordenes ?? []).map(o => o.id)
+  const { data: todosItems } = oeIds.length > 0
+    ? await supabase
+        .from('oe_items')
+        .select('orden_ejecucion_id, id, estado')
+        .in('orden_ejecucion_id', oeIds)
+    : { data: [] }
+
+  const itemsPorOe = new Map<string, Array<{ id: string; estado: string }>>()
+  for (const item of todosItems ?? []) {
+    const arr = itemsPorOe.get(item.orden_ejecucion_id) ?? []
+    arr.push({ id: item.id, estado: item.estado })
+    itemsPorOe.set(item.orden_ejecucion_id, arr)
+  }
+
+  // Contactos por separado
   const contactoIds = [...new Set((ordenes ?? []).map(o => o.contacto_id).filter(Boolean))]
   const { data: contactos } = contactoIds.length > 0
     ? await supabase
@@ -67,7 +83,7 @@ export default async function OrdenesPage() {
   )
 
   const rows = (ordenes ?? []).map(oe => {
-    const items     = (oe.oe_items ?? []) as Array<{ id: string; estado: string }>
+    const items     = itemsPorOe.get(oe.id) ?? []
     const total     = items.length
     const recibidos = items.filter(i => i.estado === 'recibido').length
     const pedidos   = items.filter(i => i.estado === 'pedido').length
