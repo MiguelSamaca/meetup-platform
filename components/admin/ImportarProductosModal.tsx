@@ -1,70 +1,9 @@
 'use client'
 
 import { useRef, useState, useTransition } from 'react'
-import * as XLSX from 'xlsx'
 import { importarProductos, type FilaProductoImport } from '@/app/actions/productos'
 
-/* ── Columnas que acepta el Excel (case-insensitive) ─────────────────── */
-const COL_MAP: Record<string, keyof FilaProductoImport> = {
-  referencia:  'referencia',
-  sku:         'referencia',
-  'ref':       'referencia',
-  descripcion: 'descripcion',
-  descripción: 'descripcion',
-  nombre:      'descripcion',
-  producto:    'descripcion',
-  proveedor:   'proveedor',
-  marca:       'proveedor',
-  brand:       'proveedor',
-  unidad:      'unidad',
-  unit:        'unidad',
-  und:         'unidad',
-}
-
 type FilaPreview = FilaProductoImport & { _fila: number; _error?: string }
-
-const UNIDADES_VALIDAS = ['und', 'm', 'm2', 'kg', 'gl', 'hr', 'kit']
-
-function normalize(headers: string[]): Record<number, keyof FilaProductoImport> {
-  const map: Record<number, keyof FilaProductoImport> = {}
-  headers.forEach((h, i) => {
-    const key = COL_MAP[h.trim().toLowerCase()]
-    if (key) map[i] = key
-  })
-  return map
-}
-
-function parseSheet(wb: XLSX.WorkBook): FilaPreview[] {
-  const ws   = wb.Sheets[wb.SheetNames[0]]
-  const rows = XLSX.utils.sheet_to_json<string[]>(ws, { header: 1, defval: '' }) as string[][]
-  if (rows.length < 2) return []
-
-  const headerRow = rows[0].map(String)
-  const colMap    = normalize(headerRow)
-
-  return rows.slice(1).map((row, idx) => {
-    const fila: FilaPreview = {
-      _fila:       idx + 2,
-      referencia:  null,
-      proveedor:   null,
-      descripcion: '',
-      unidad:      'und',
-    }
-    Object.entries(colMap).forEach(([colIdx, field]) => {
-      const val = String(row[Number(colIdx)] ?? '').trim()
-      ;(fila as any)[field] = val || null
-    })
-    // unidad: normalizar
-    const u = fila.unidad?.toLowerCase() ?? ''
-    fila.unidad = UNIDADES_VALIDAS.includes(u) ? u : 'und'
-    // validar
-    if (!fila.descripcion) fila._error = 'Descripción vacía'
-    return fila
-  }).filter(f => Object.values(f).some(v => v !== null && v !== '' && v !== 'und' && v !== 2))
-  // quitar filas completamente vacías
-}
-
-/* ──────────────────────────────────────────────────────────────────────── */
 
 interface Props {
   onClose:     () => void
@@ -72,37 +11,54 @@ interface Props {
 }
 
 export default function ImportarProductosModal({ onClose, onImportado }: Props) {
-  const fileRef            = useRef<HTMLInputElement>(null)
-  const [filas, setFilas]  = useState<FilaPreview[]>([])
-  const [fileName, setFileName] = useState('')
-  const [paso, setPaso]    = useState<'upload' | 'preview' | 'done'>('upload')
-  const [resultado, setResultado] = useState<{ insertados: number; errores: string[] } | null>(null)
-  const [pending, start]   = useTransition()
+  const fileRef                          = useRef<HTMLInputElement>(null)
+  const [filas,      setFilas]           = useState<FilaPreview[]>([])
+  const [fileName,   setFileName]        = useState('')
+  const [paso,       setPaso]            = useState<'upload' | 'preview' | 'done'>('upload')
+  const [resultado,  setResultado]       = useState<{ insertados: number; errores: string[] } | null>(null)
+  const [cargando,   setCargando]        = useState(false)
+  const [errorCarga, setErrorCarga]      = useState('')
+  const [pending,    start]              = useTransition()
 
-  /* ── Parsear archivo ── */
-  function handleFile(file: File) {
+  /* ── Subir y parsear en el servidor ── */
+  async function handleFile(file: File) {
+    setCargando(true)
+    setErrorCarga('')
     setFileName(file.name)
-    const reader = new FileReader()
-    reader.onload = e => {
-      try {
-        const data = new Uint8Array(e.target?.result as ArrayBuffer)
-        const wb   = XLSX.read(data, { type: 'array' })
-        const rows = parseSheet(wb)
-        if (!rows.length) { alert('No se encontraron filas con datos.'); return }
-        setFilas(rows)
-        setPaso('preview')
-      } catch {
-        alert('Error leyendo el archivo. Asegúrate de que sea .xlsx o .xls')
-      }
+    try {
+      const fd = new FormData()
+      fd.append('file', file)
+      const res  = await fetch('/api/parse-excel', { method: 'POST', body: fd })
+      const json = await res.json()
+      if (!res.ok) throw new Error(json.error ?? 'Error procesando el archivo')
+      if (!json.filas?.length) throw new Error('No se encontraron filas con datos')
+      setFilas(json.filas)
+      setPaso('preview')
+    } catch (e: any) {
+      setErrorCarga(e.message)
+    } finally {
+      setCargando(false)
     }
-    reader.readAsArrayBuffer(file)
+  }
+
+  /* ── Descargar plantilla ── */
+  function descargarPlantilla() {
+    const csv = 'referencia,descripcion,proveedor,unidad\nSKU-001,Proyector Epson EB-X51,Epson,und\nSKU-002,Cable HDMI 5m,Generic,m\n'
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' })
+    const url  = URL.createObjectURL(blob)
+    const a    = document.createElement('a')
+    a.href     = url
+    a.download = 'plantilla_productos.csv'
+    a.click()
+    URL.revokeObjectURL(url)
   }
 
   /* ── Confirmar import ── */
   function handleImportar() {
-    const validas = filas.filter(f => !f._error).map(({ referencia, proveedor, descripcion, unidad }) => ({
-      referencia, proveedor, descripcion, unidad,
-    }))
+    const validas: FilaProductoImport[] = filas
+      .filter(f => !f._error)
+      .map(({ referencia, proveedor, descripcion, unidad }) => ({ referencia, proveedor, descripcion, unidad }))
+
     start(async () => {
       const res = await importarProductos(validas)
       setResultado(res)
@@ -111,22 +67,8 @@ export default function ImportarProductosModal({ onClose, onImportado }: Props) 
     })
   }
 
-  /* ── Descargar plantilla ── */
-  function descargarPlantilla() {
-    const ws = XLSX.utils.aoa_to_sheet([
-      ['referencia', 'descripcion', 'proveedor', 'unidad'],
-      ['SKU-001', 'Proyector Epson EB-X51', 'Epson', 'und'],
-      ['SKU-002', 'Cable HDMI 5m', 'Generic', 'm'],
-      ['SKU-003', 'Pantalla de proyección 100"', 'Draper', 'und'],
-    ])
-    ws['!cols'] = [{ wch: 16 }, { wch: 40 }, { wch: 20 }, { wch: 10 }]
-    const wb = XLSX.utils.book_new()
-    XLSX.utils.book_append_sheet(wb, ws, 'Productos')
-    XLSX.writeFile(wb, 'plantilla_productos.xlsx')
-  }
-
-  const validas  = filas.filter(f => !f._error)
-  const invalidas = filas.filter(f => f._error)
+  const validas   = filas.filter(f => !f._error)
+  const invalidas = filas.filter(f =>  f._error)
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
@@ -137,13 +79,12 @@ export default function ImportarProductosModal({ onClose, onImportado }: Props) 
           <div>
             <h2 className="text-lg font-bold text-gray-900">Importar productos desde Excel</h2>
             <p className="text-xs text-gray-400 mt-0.5">
-              Columnas reconocidas: <span className="font-mono">referencia · descripcion · proveedor · unidad</span>
+              Columnas: <span className="font-mono">referencia · descripcion · proveedor · unidad</span>
             </p>
           </div>
           <button onClick={onClose} className="text-gray-400 hover:text-gray-600 text-2xl leading-none">×</button>
         </div>
 
-        {/* Body */}
         <div className="flex-1 overflow-y-auto">
 
           {/* ── PASO 1: Upload ── */}
@@ -151,18 +92,24 @@ export default function ImportarProductosModal({ onClose, onImportado }: Props) 
             <div className="p-6 space-y-5">
               {/* Drop zone */}
               <div
-                className="border-2 border-dashed border-gray-300 rounded-xl p-10 text-center hover:border-emerald-400 hover:bg-emerald-50 transition-colors cursor-pointer"
-                onClick={() => fileRef.current?.click()}
+                className={`border-2 border-dashed rounded-xl p-10 text-center transition-colors cursor-pointer ${
+                  cargando
+                    ? 'border-emerald-300 bg-emerald-50'
+                    : 'border-gray-300 hover:border-emerald-400 hover:bg-emerald-50'
+                }`}
+                onClick={() => !cargando && fileRef.current?.click()}
                 onDragOver={e => e.preventDefault()}
                 onDrop={e => {
                   e.preventDefault()
                   const f = e.dataTransfer.files[0]
-                  if (f) handleFile(f)
+                  if (f && !cargando) handleFile(f)
                 }}
               >
-                <div className="text-4xl mb-3">📊</div>
-                <p className="font-semibold text-gray-700">Arrastra tu Excel aquí o haz clic para seleccionar</p>
-                <p className="text-xs text-gray-400 mt-1">Formatos soportados: .xlsx · .xls · .csv</p>
+                <div className="text-4xl mb-3">{cargando ? '⏳' : '📊'}</div>
+                <p className="font-semibold text-gray-700">
+                  {cargando ? 'Procesando archivo…' : 'Arrastra tu Excel o CSV aquí, o haz clic para seleccionar'}
+                </p>
+                <p className="text-xs text-gray-400 mt-1">Formatos: .xlsx · .xls · .csv</p>
                 <input
                   ref={fileRef}
                   type="file"
@@ -172,13 +119,19 @@ export default function ImportarProductosModal({ onClose, onImportado }: Props) 
                 />
               </div>
 
+              {errorCarga && (
+                <p className="text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg px-4 py-2.5">
+                  ⚠ {errorCarga}
+                </p>
+              )}
+
               {/* Plantilla */}
               <div className="bg-blue-50 border border-blue-100 rounded-xl p-4 flex items-start gap-3">
                 <span className="text-2xl">📋</span>
                 <div className="flex-1">
                   <p className="text-sm font-semibold text-blue-800">¿Primera vez?</p>
                   <p className="text-xs text-blue-600 mt-0.5">
-                    Descarga la plantilla Excel con el formato correcto y complétala con tus productos.
+                    Descarga la plantilla CSV con el formato correcto y complétala con tus productos.
                   </p>
                 </div>
                 <button
@@ -191,18 +144,18 @@ export default function ImportarProductosModal({ onClose, onImportado }: Props) 
               </div>
 
               {/* Instrucciones */}
-              <div className="text-xs text-gray-500 space-y-1">
-                <p className="font-semibold text-gray-600 mb-2">Columnas del Excel:</p>
-                <div className="grid grid-cols-2 gap-1">
+              <div className="text-xs text-gray-500 space-y-2">
+                <p className="font-semibold text-gray-600">Columnas del archivo:</p>
+                <div className="grid grid-cols-2 gap-1.5">
                   {[
                     ['referencia', 'SKU del producto (opcional)'],
                     ['descripcion', 'Nombre del producto ✱ obligatorio'],
                     ['proveedor',  'Marca o proveedor (opcional)'],
                     ['unidad',     'und · m · m2 · kg · gl · hr · kit'],
                   ].map(([col, desc]) => (
-                    <div key={col} className="flex gap-1.5">
+                    <div key={col} className="flex gap-1.5 items-start">
                       <span className="font-mono bg-gray-100 px-1.5 py-0.5 rounded text-gray-700 w-24 flex-shrink-0">{col}</span>
-                      <span className="text-gray-500">{desc}</span>
+                      <span>{desc}</span>
                     </div>
                   ))}
                 </div>
@@ -222,7 +175,7 @@ export default function ImportarProductosModal({ onClose, onImportado }: Props) 
                 {invalidas.length > 0 && (
                   <div className="flex-1 bg-red-50 border border-red-200 rounded-xl p-4 text-center">
                     <p className="text-2xl font-bold text-red-600">{invalidas.length}</p>
-                    <p className="text-xs text-red-500 font-medium mt-0.5">Filas con error (se omitirán)</p>
+                    <p className="text-xs text-red-500 font-medium mt-0.5">Filas omitidas (error)</p>
                   </div>
                 )}
                 <div className="flex-1 bg-gray-50 border border-gray-200 rounded-xl p-4 text-center">
@@ -246,23 +199,18 @@ export default function ImportarProductosModal({ onClose, onImportado }: Props) 
                   </thead>
                   <tbody className="divide-y divide-gray-50">
                     {filas.map(f => (
-                      <tr
-                        key={f._fila}
-                        className={f._error ? 'bg-red-50' : 'hover:bg-gray-50'}
-                      >
+                      <tr key={f._fila} className={f._error ? 'bg-red-50' : 'hover:bg-gray-50'}>
                         <td className="px-3 py-2 text-gray-400">{f._fila}</td>
                         <td className="px-3 py-2 font-mono text-gray-500">{f.referencia ?? '—'}</td>
                         <td className="px-3 py-2 font-medium text-gray-800 max-w-[200px]">
-                          <span className="line-clamp-2">{f.descripcion || <span className="text-red-400 italic">vacío</span>}</span>
+                          {f.descripcion || <span className="text-red-400 italic">vacío</span>}
                         </td>
                         <td className="px-3 py-2 text-gray-600">{f.proveedor ?? '—'}</td>
                         <td className="px-3 py-2">
                           <span className="bg-gray-100 text-gray-600 px-1.5 py-0.5 rounded font-mono">{f.unidad}</span>
                         </td>
                         <td className="px-3 py-2">
-                          {f._error && (
-                            <span className="text-red-500 text-xs">⚠ {f._error}</span>
-                          )}
+                          {f._error && <span className="text-red-500 text-xs">⚠ {f._error}</span>}
                         </td>
                       </tr>
                     ))}
@@ -275,16 +223,14 @@ export default function ImportarProductosModal({ onClose, onImportado }: Props) 
           {/* ── PASO 3: Done ── */}
           {paso === 'done' && resultado && (
             <div className="p-10 text-center space-y-4">
-              <div className="text-5xl">
-                {resultado.insertados > 0 ? '✅' : '⚠️'}
-              </div>
+              <div className="text-5xl">{resultado.insertados > 0 ? '✅' : '⚠️'}</div>
               <p className="text-xl font-bold text-gray-800">
                 {resultado.insertados > 0
-                  ? `${resultado.insertados} producto${resultado.insertados !== 1 ? 's' : ''} importado${resultado.insertados !== 1 ? 's' : ''} correctamente`
+                  ? `${resultado.insertados} producto${resultado.insertados !== 1 ? 's' : ''} importado${resultado.insertados !== 1 ? 's' : ''}`
                   : 'No se importaron productos'}
               </p>
               {resultado.errores.length > 0 && (
-                <div className="text-left bg-amber-50 border border-amber-200 rounded-xl p-4 text-xs text-amber-700 space-y-1">
+                <div className="text-left bg-amber-50 border border-amber-200 rounded-xl p-4 text-xs text-amber-700 space-y-1 max-w-md mx-auto">
                   <p className="font-semibold mb-2">Advertencias:</p>
                   {resultado.errores.map((e, i) => <p key={i}>• {e}</p>)}
                 </div>
@@ -294,11 +240,11 @@ export default function ImportarProductosModal({ onClose, onImportado }: Props) 
         </div>
 
         {/* Footer */}
-        <div className="px-6 py-4 border-t border-gray-100 flex items-center justify-between">
+        <div className="px-6 py-4 border-t border-gray-100 flex items-center">
           {paso === 'preview' && (
             <button
               type="button"
-              onClick={() => { setPaso('upload'); setFilas([]); setFileName('') }}
+              onClick={() => { setPaso('upload'); setFilas([]); setFileName(''); setErrorCarga('') }}
               className="text-sm text-gray-500 hover:text-gray-700"
             >
               ← Cambiar archivo
