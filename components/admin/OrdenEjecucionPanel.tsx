@@ -165,8 +165,8 @@ export default function OrdenEjecucionPanel({ oe, initialItems, initialProveedor
     const m = new Map<string, ProvState>()
     for (const p of initialProveedores) {
       const calcCost = Math.round(itemCostMap.get(p.proveedor) ?? 0)
-      // Usar el costo guardado, o si es 0 usar el calculado de los ítems
-      const mo = p.monto_orden    > 0 ? String(p.monto_orden)    : calcCost > 0 ? String(calcCost) : ''
+      // Siempre mostrar el costo calculado de ítems (fuente de verdad)
+      const mo = calcCost > 0 ? String(calcCost) : p.monto_orden > 0 ? String(p.monto_orden) : ''
       const am = p.anticipo_monto > 0 ? String(p.anticipo_monto) : ''
       const moNum = parseFloat(mo) || 0
       const ap = moNum > 0 && p.anticipo_monto > 0
