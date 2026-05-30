@@ -469,6 +469,14 @@ export default function OrdenEjecucionPanel({ oe, initialItems, initialProveedor
                         </div>
                       </div>
 
+                      {/* Total IVA incluido */}
+                      {montoOrden > 0 && (
+                        <div className="pb-1">
+                          <p className="text-[10px] text-gray-400 uppercase tracking-wide mb-1">Total c/IVA</p>
+                          <span className="font-bold text-blue-700 text-sm">${fmt(Math.round(montoOrden * 1.19))}</span>
+                        </div>
+                      )}
+
                       {/* Anticipo % */}
                       <div>
                         <p className="text-[10px] text-gray-400 uppercase tracking-wide mb-1">Anticipo %</p>
