@@ -31,24 +31,24 @@ export async function crearOrdenEjecucion(cotizacionId: string, contactoId: stri
 
   if (existing) redirect(`/admin/ordenes/${existing.id}`)
 
-  // Leer ítems de la cotización (incluyendo costos)
+  // Verificar que la cotización pertenece al tenant
   const { data: cot } = await admin
     .from('cotizaciones')
-    .select(`
-      cotizacion_items(
-        referencia, proveedor, descripcion, cantidad,
-        precio_unitario, descuento,
-        costo_unitario, moneda_costo, trm,
-        orden
-      )
-    `)
+    .select('id')
     .eq('id', cotizacionId)
     .eq('tenant_id', profile.tenant_id!)
-    .single()
+    .maybeSingle()
 
   if (!cot) throw new Error('Cotización no encontrada')
 
-  const items = (cot.cotizacion_items ?? []) as Array<{
+  // Leer ítems ordenados explícitamente — evita orden arbitrario de PostgREST
+  const { data: cotItems } = await admin
+    .from('cotizacion_items')
+    .select('referencia, proveedor, descripcion, cantidad, precio_unitario, descuento, costo_unitario, moneda_costo, trm, orden')
+    .eq('cotizacion_id', cotizacionId)
+    .order('orden', { ascending: true })
+
+  const items = (cotItems ?? []) as Array<{
     referencia: string | null; proveedor: string | null; descripcion: string
     cantidad: number; precio_unitario: number; descuento: number
     costo_unitario: number; moneda_costo: string; trm: number | null
