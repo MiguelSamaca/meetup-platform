@@ -28,7 +28,7 @@ export default async function AdminLayout({ children }: { children: React.ReactN
   const brandColor = (config as any)?.color_primario ?? '#059669'
   const modulos: string[] = (tenant as any)?.modulos ?? [
     'empresas','contactos','clientes',
-    'proyectos','cotizaciones','ordenes','productos','tickets',
+    'proyectos','cotizaciones','ordenes','productos','tickets','finanzas',
   ]
 
   return (

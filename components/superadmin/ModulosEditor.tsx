@@ -27,6 +27,12 @@ const MODULOS_CATALOGO = [
       { key: 'tickets', label: 'Tickets de soporte', desc: 'Sistema de soporte y seguimiento' },
     ],
   },
+  {
+    grupo: 'Finanzas',
+    items: [
+      { key: 'finanzas', label: 'Módulo financiero', desc: 'Dashboard, cobrar, pagar, rentabilidad y flujo de caja' },
+    ],
+  },
 ]
 
 interface Props {
