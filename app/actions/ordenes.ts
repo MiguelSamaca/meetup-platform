@@ -172,6 +172,8 @@ export async function actualizarAnticipo(
     .eq('tenant_id', profile.tenant_id!)
 
   revalidatePath(`/admin/ordenes/${oeId}`)
+  revalidatePath('/admin/finanzas/cobrar')
+  revalidatePath('/admin/finanzas')
 }
 
 /* ─────────────────────────────────────────────────────────────
@@ -191,6 +193,8 @@ export async function actualizarSaldo(
     .eq('tenant_id', profile.tenant_id!)
 
   revalidatePath(`/admin/ordenes/${oeId}`)
+  revalidatePath('/admin/finanzas/cobrar')
+  revalidatePath('/admin/finanzas')
 }
 
 /* ─────────────────────────────────────────────────────────────
