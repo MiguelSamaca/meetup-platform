@@ -242,6 +242,8 @@ export async function actualizarAnticipoProv(
 
   await query
   revalidatePath(`/admin/ordenes/${oeId}`)
+  revalidatePath('/admin/finanzas/pagar')
+  revalidatePath('/admin/finanzas')
 }
 
 /* ─────────────────────────────────────────────────────────────
