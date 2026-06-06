@@ -168,9 +168,10 @@ export default function OrdenEjecucionPanel({ oe, initialItems, initialProveedor
       // Siempre mostrar el costo calculado de ítems (fuente de verdad)
       const mo = calcCost > 0 ? String(calcCost) : p.monto_orden > 0 ? String(p.monto_orden) : ''
       const am = p.anticipo_monto > 0 ? String(p.anticipo_monto) : ''
-      const moNum = parseFloat(mo) || 0
-      const ap = moNum > 0 && p.anticipo_monto > 0
-        ? String(Math.round((p.anticipo_monto / moNum) * 100))
+      const moNum    = parseFloat(mo) || 0
+      const baseIVA  = Math.round(moNum * 1.19)
+      const ap = baseIVA > 0 && p.anticipo_monto > 0
+        ? String(Math.round((p.anticipo_monto / baseIVA) * 100))
         : ''
       m.set(p.proveedor, { monto_orden: mo, anticipo_monto: am, anticipo_pct: ap })
     }
@@ -200,20 +201,23 @@ export default function OrdenEjecucionPanel({ oe, initialItems, initialProveedor
       const digits = raw.replace(/[^\d]/g, '')
 
       if (field === 'monto_orden') {
-        const mo = parseFloat(digits) || 0
-        const am = parseFloat(cur.anticipo_monto) || 0
-        const newPct = mo > 0 && am > 0 ? String(Math.round((am / mo) * 100)) : cur.anticipo_pct
+        const mo      = parseFloat(digits) || 0
+        const am      = parseFloat(cur.anticipo_monto) || 0
+        const baseIVA = Math.round(mo * 1.19)
+        const newPct  = baseIVA > 0 && am > 0 ? String(Math.round((am / baseIVA) * 100)) : cur.anticipo_pct
         next.set(proveedor, { ...cur, monto_orden: digits, anticipo_pct: newPct })
       } else if (field === 'anticipo_monto') {
-        const mo  = parseFloat(cur.monto_orden) || 0
-        const am  = parseFloat(digits) || 0
-        const pct = mo > 0 && am > 0 ? String(Math.round((am / mo) * 100)) : ''
+        const mo      = parseFloat(cur.monto_orden) || 0
+        const am      = parseFloat(digits) || 0
+        const baseIVA = Math.round(mo * 1.19)
+        const pct     = baseIVA > 0 && am > 0 ? String(Math.round((am / baseIVA) * 100)) : ''
         next.set(proveedor, { ...cur, anticipo_monto: digits, anticipo_pct: pct })
       } else {
-        // anticipo_pct → recalculate monto
-        const mo     = parseFloat(cur.monto_orden) || 0
-        const pctVal = Math.min(100, Math.max(0, parseFloat(digits) || 0))
-        const am     = mo > 0 ? String(Math.round(mo * pctVal / 100)) : ''
+        // anticipo_pct → recalculate monto sobre Total c/IVA
+        const mo      = parseFloat(cur.monto_orden) || 0
+        const baseIVA = Math.round(mo * 1.19)
+        const pctVal  = Math.min(100, Math.max(0, parseFloat(digits) || 0))
+        const am      = baseIVA > 0 ? String(Math.round(baseIVA * pctVal / 100)) : ''
         next.set(proveedor, { ...cur, anticipo_pct: digits, anticipo_monto: am })
       }
       return next
@@ -400,8 +404,9 @@ export default function OrdenEjecucionPanel({ oe, initialItems, initialProveedor
             const provData        = esSinProv ? null : getProvData(provKey)
             const montoOrden      = provData ? parseFmt(provData.monto_orden)    : 0
             const anticipoGirado  = provData ? parseFmt(provData.anticipo_monto) : 0
-            const faltaPagar      = Math.max(0, montoOrden - anticipoGirado)
-            const pctAnticipoProv = montoOrden > 0 ? Math.round((anticipoGirado / montoOrden) * 100) : 0
+            const totalConIVA     = Math.round(montoOrden * 1.19)
+            const faltaPagar      = Math.max(0, totalConIVA - anticipoGirado)
+            const pctAnticipoProv = totalConIVA > 0 ? Math.round((anticipoGirado / totalConIVA) * 100) : 0
 
             return (
               <div
