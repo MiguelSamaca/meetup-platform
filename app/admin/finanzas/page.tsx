@@ -2,6 +2,7 @@ import { createAdminClient } from '@/lib/supabase/admin'
 import { getCurrentProfile } from '@/lib/auth'
 import { Suspense } from 'react'
 import PeriodoSelector from '@/components/admin/finanzas/PeriodoSelector'
+import SaldoCajaEditor from '@/components/admin/finanzas/SaldoCajaEditor'
 import Link from 'next/link'
 
 /* ── Helpers ── */
@@ -83,6 +84,8 @@ export default async function FinanzasDashboardPage({
     { data: oes },
     { data: gastos },
     { count: proyActivos },
+    { data: configCaja },
+    { data: gastosFijos },
   ] = await Promise.all([
     supabase
       .from('ordenes_ejecucion')
@@ -102,7 +105,20 @@ export default async function FinanzasDashboardPage({
       .select('*', { count: 'exact', head: true })
       .eq('tenant_id', tid)
       .eq('estado', 'activo'),
+    supabase
+      .from('tenant_config')
+      .select('saldo_caja_actual')
+      .eq('tenant_id', tid)
+      .maybeSingle(),
+    supabase
+      .from('gastos_fijos')
+      .select('monto')
+      .eq('tenant_id', tid)
+      .eq('activo', true),
   ])
+
+  const saldoCajaActual  = (configCaja as any)?.saldo_caja_actual ?? 0
+  const totalGastosFijos = (gastosFijos ?? []).reduce((s, g) => s + (g.monto ?? 0), 0)
 
   /* ── Cálculo de KPIs — todo con IVA (valores reales de caja) ── */
   const totalFacturado  = (oes ?? []).reduce((s, o) => {
@@ -147,16 +163,25 @@ export default async function FinanzasDashboardPage({
       </div>
 
       {/* KPIs */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+        {/* Caja actual — el primero y más importante */}
+        <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-5 col-span-2 lg:col-span-1">
+          <div className="flex items-start justify-between mb-2">
+            <p className="text-xs font-semibold text-emerald-700 uppercase tracking-wide">💰 Caja actual</p>
+            <span className="text-xl">💰</span>
+          </div>
+          <SaldoCajaEditor saldoActual={saldoCajaActual} />
+          <p className="text-xs text-emerald-600 mt-1">Actualiza cuando recibas pagos</p>
+        </div>
         <KPICard
           label="Total facturado"
           valor={`$${fmt(totalFacturado)}`}
-          sub={`${cantOes} OE${cantOes !== 1 ? 's' : ''}`}
+          sub={`${cantOes} OE${cantOes !== 1 ? 's' : ''} · c/IVA`}
           color="gray"
           icon="💼"
         />
         <KPICard
-          label="Total recaudado"
+          label="Recaudado"
           valor={`$${fmt(totalRecaudado)}`}
           sub={totalFacturado > 0 ? `${Math.round(totalRecaudado / totalFacturado * 100)}% del facturado` : '—'}
           color="emerald"
@@ -169,22 +194,37 @@ export default async function FinanzasDashboardPage({
           color={totalPendiente > 0 ? 'amber' : 'gray'}
           icon="⏳"
         />
-        <KPICard
-          label="Gastos adicionales"
-          valor={`$${fmt(totalGastos)}`}
-          sub={`Proyectos activos: ${proyActivos ?? 0}`}
-          color={totalGastos > 0 ? 'red' : 'gray'}
-          icon="📋"
-        />
       </div>
 
+      {/* Banner de proyección con gastos fijos */}
+      {totalGastosFijos > 0 && (
+        <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 mb-8">
+          <div className="flex flex-wrap items-center justify-between gap-4">
+            <div>
+              <p className="text-xs font-semibold text-amber-700 uppercase tracking-wide mb-1">
+                📅 Gastos fijos mensuales activos: <span className="text-amber-800">${fmt(totalGastosFijos)}/mes</span>
+              </p>
+              <div className="flex flex-wrap gap-4 text-xs text-amber-700">
+                <span>Con caja actual de <strong>${fmt(saldoCajaActual)}</strong> y sin nuevos cobros, la caja dura aprox. <strong>{totalGastosFijos > 0 ? Math.floor(saldoCajaActual / totalGastosFijos) : '∞'} mes{Math.floor(saldoCajaActual / totalGastosFijos) !== 1 ? 'es' : ''}</strong></span>
+                <span>·</span>
+                <span>Con cobros pendientes de <strong>${fmt(totalPendiente)}</strong>, en total tendrías <strong>${fmt(saldoCajaActual + totalPendiente)}</strong></span>
+              </div>
+            </div>
+            <Link href="/admin/finanzas/flujo" className="text-xs bg-amber-600 text-white px-3 py-2 rounded-lg hover:bg-amber-700 transition-colors font-semibold whitespace-nowrap">
+              Ver proyección →
+            </Link>
+          </div>
+        </div>
+      )}
+
       {/* Accesos rápidos a submódulos */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-8">
+      <div className="grid grid-cols-2 lg:grid-cols-5 gap-3 mb-8">
         {[
-          { href: '/admin/finanzas/cobrar',       icon: '📥', label: 'Cuentas por cobrar',  desc: 'Pagos de clientes',      color: 'border-emerald-200 hover:bg-emerald-50' },
-          { href: '/admin/finanzas/pagar',         icon: '📤', label: 'Cuentas por pagar',   desc: 'Pagos a proveedores',    color: 'border-blue-200 hover:bg-blue-50'     },
-          { href: '/admin/finanzas/rentabilidad',  icon: '📊', label: 'Rentabilidad',         desc: 'Margen por proyecto',    color: 'border-purple-200 hover:bg-purple-50' },
-          { href: '/admin/finanzas/flujo',         icon: '🔄', label: 'Flujo de caja',        desc: 'Proyección de pagos',    color: 'border-amber-200 hover:bg-amber-50'   },
+          { href: '/admin/finanzas/cobrar',       icon: '📥', label: 'Por cobrar',     desc: 'Pagos de clientes',      color: 'border-emerald-200 hover:bg-emerald-50' },
+          { href: '/admin/finanzas/pagar',         icon: '📤', label: 'Por pagar',      desc: 'Pagos a proveedores',    color: 'border-blue-200 hover:bg-blue-50'     },
+          { href: '/admin/finanzas/rentabilidad',  icon: '📊', label: 'Rentabilidad',   desc: 'Margen por proyecto',    color: 'border-purple-200 hover:bg-purple-50' },
+          { href: '/admin/finanzas/flujo',         icon: '🔄', label: 'Flujo de caja',  desc: 'Proyección mensual',     color: 'border-amber-200 hover:bg-amber-50'   },
+          { href: '/admin/finanzas/gastos-fijos',  icon: '📅', label: 'Gastos fijos',   desc: 'Recurrentes mensuales',  color: 'border-orange-200 hover:bg-orange-50' },
         ].map(m => (
           <Link
             key={m.href}

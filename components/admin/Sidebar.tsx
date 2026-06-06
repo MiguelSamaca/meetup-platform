@@ -33,11 +33,12 @@ const sections = [
   {
     label: 'FINANZAS',
     items: [
-      { href: '/admin/finanzas',              label: 'Dashboard',    icon: '◈', modulo: 'finanzas' },
-      { href: '/admin/finanzas/cobrar',        label: 'Por cobrar',   icon: '◎', modulo: 'finanzas' },
-      { href: '/admin/finanzas/pagar',         label: 'Por pagar',    icon: '◑', modulo: 'finanzas' },
-      { href: '/admin/finanzas/rentabilidad',  label: 'Rentabilidad', icon: '◫', modulo: 'finanzas' },
-      { href: '/admin/finanzas/flujo',         label: 'Flujo de caja',icon: '▣', modulo: 'finanzas' },
+      { href: '/admin/finanzas',                label: 'Dashboard',    icon: '◈', modulo: 'finanzas' },
+      { href: '/admin/finanzas/cobrar',         label: 'Por cobrar',   icon: '◎', modulo: 'finanzas' },
+      { href: '/admin/finanzas/pagar',          label: 'Por pagar',    icon: '◑', modulo: 'finanzas' },
+      { href: '/admin/finanzas/rentabilidad',   label: 'Rentabilidad', icon: '◫', modulo: 'finanzas' },
+      { href: '/admin/finanzas/flujo',          label: 'Flujo de caja',icon: '▣', modulo: 'finanzas' },
+      { href: '/admin/finanzas/gastos-fijos',   label: 'Gastos fijos', icon: '◇', modulo: 'finanzas' },
     ],
   },
 ]
