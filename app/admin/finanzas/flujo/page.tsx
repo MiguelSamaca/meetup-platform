@@ -80,12 +80,15 @@ export default async function FlujoCajaPage({
       .from('gastos')
       .select('id, proyecto_id, descripcion, monto, categoria, fecha')
       .eq('tenant_id', tid)
-      .gte('fecha', hoyStr)
-      .order('fecha'),
+      .order('fecha'),          // Todos — filtramos pasados/futuros en código
   ])
 
-  const saldoCajaActual = (config as any)?.saldo_caja_actual ?? 0
+  const saldoCajaActual  = (config as any)?.saldo_caja_actual ?? 0
   const totalGastosFijos = (gastosFijos ?? []).reduce((s, g) => s + g.monto, 0)
+
+  /* Gastos: separar pasados (para cálculo de caja) de futuros (para timeline) */
+  const gastosPasados  = (gastos ?? []).filter(g => !g.fecha || g.fecha <= hoyStr)
+  const gastosFuturos  = (gastos ?? []).filter(g => g.fecha  &&  g.fecha  > hoyStr)
 
   /* Contactos */
   const contactoIds = [...new Set((oes ?? []).map(o => o.contacto_id).filter(Boolean))]
@@ -102,6 +105,34 @@ export default async function FlujoCajaPage({
         .select('orden_ejecucion_id, proveedor, estado, anticipo_proveedor_pagado')
         .in('orden_ejecucion_id', oeIds)
     : { data: [] }
+
+  /* ── Cálculo automático de caja (transacciones reales registradas) ── */
+  const oeIdsSetCalc = new Set((oes ?? []).map(o => o.id))
+
+  // Entradas: anticipos y saldos de clientes ya recibidos (c/IVA)
+  const entradasRecibidas = (oes ?? []).reduce((s, o) => {
+    const totalIva = o.total_con_iva ?? Math.round((o.total_cotizacion ?? 0) * 1.19)
+    const anticIva = Math.round(totalIva * (o.anticipo_porcentaje ?? 50) / 100)
+    const saldoIva = Math.max(0, totalIva - anticIva)
+    return s
+      + (o.anticipo_recibido ? anticIva : 0)
+      + (o.saldo_recibido    ? saldoIva : 0)
+  }, 0)
+
+  // Salidas: anticipos pagados a proveedores (anticipo_monto ya es c/IVA)
+  const salidasProveedores = (proveedores ?? []).reduce((s, prov) => {
+    if (!oeIdsSetCalc.has(prov.orden_ejecucion_id)) return s
+    const provItems = (oeItems ?? []).filter(
+      i => i.orden_ejecucion_id === prov.orden_ejecucion_id && i.proveedor === prov.proveedor
+    )
+    const anticipoPagado = provItems.length > 0 && provItems.every(i => i.anticipo_proveedor_pagado)
+    return s + (anticipoPagado ? (prov.anticipo_monto ?? 0) : 0)
+  }, 0)
+
+  // Salidas: gastos ya realizados (con fecha pasada o sin fecha)
+  const salidasGastosRealizados = gastosPasados.reduce((s, g) => s + (g.monto ?? 0), 0)
+
+  const saldoCalculado = Math.round(entradasRecibidas - salidasProveedores - salidasGastosRealizados)
 
   /* ── Meses del horizonte (actual + 9 siguientes) ── */
   const horizonte = Array.from({ length: 10 }, (_, i) => {
@@ -327,8 +358,8 @@ export default async function FlujoCajaPage({
     }
   }
 
-  /* SALIDAS: gastos puntuales (del módulo de proyectos) */
-  for (const g of gastos ?? []) {
+  /* SALIDAS: gastos puntuales futuros (del módulo de proyectos) */
+  for (const g of gastosFuturos) {
     const mes = !g.fecha ? 'sin_fecha' : toMes(g.fecha)
     movimientos.push({
       tipo: 'salida', concepto: `Gasto — ${g.descripcion}`,
@@ -375,7 +406,7 @@ export default async function FlujoCajaPage({
   })
 
   /* Balance acumulado — arranca desde saldo en caja actual */
-  let acum = saldoCajaActual
+  let acum = saldoCajaActual !== 0 ? saldoCajaActual : saldoCalculado
   const gruposConAcum = grupos.map(g => {
     if (g.mes === 'sin_fecha') return { ...g, saldoInicio: acum, saldoFin: acum }
     const saldoInicio = acum
@@ -399,7 +430,10 @@ export default async function FlujoCajaPage({
     }
   }
 
-  let saldoRol = saldoCajaActual
+  // La proyección usa el valor guardado manualmente;
+  // si aún no se ha editado (= 0), usa el cálculo automático como punto de partida
+  const saldoBaseProyeccion = saldoCajaActual !== 0 ? saldoCajaActual : saldoCalculado
+  let saldoRol = saldoBaseProyeccion
   const proyeccion = horizonte.map(m => {
     const cobros    = cobrosPorMes.get(m.key) ?? 0
     const saldoInicio = saldoRol
@@ -433,7 +467,15 @@ export default async function FlujoCajaPage({
               <p className="text-xs text-emerald-600 mt-0.5">Ingresa el dinero disponible hoy</p>
             </div>
           </div>
-          <SaldoCajaEditor saldoActual={saldoCajaActual} />
+          <SaldoCajaEditor
+            saldoActual={saldoCajaActual}
+            saldoCalculado={saldoCalculado}
+            detalleCaja={{
+              entradas:       entradasRecibidas,
+              salidasProv:    salidasProveedores,
+              salidasGastos:  salidasGastosRealizados,
+            }}
+          />
           <p className="text-xs text-emerald-600 mt-2">
             La proyección mensual parte de este valor y suma cobros / descuenta gastos fijos.
           </p>
