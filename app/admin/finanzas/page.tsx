@@ -86,7 +86,7 @@ export default async function FinanzasDashboardPage({
   ] = await Promise.all([
     supabase
       .from('ordenes_ejecucion')
-      .select('id, consecutivo, estado, total_cotizacion, anticipo_monto, anticipo_recibido, saldo_recibido, cotizacion_id, contacto_id, created_at')
+      .select('id, consecutivo, estado, total_cotizacion, total_con_iva, anticipo_porcentaje, anticipo_monto, anticipo_recibido, saldo_recibido, cotizacion_id, contacto_id, created_at')
       .eq('tenant_id', tid)
       .gte('created_at', desde)
       .lte('created_at', hasta)
@@ -104,11 +104,16 @@ export default async function FinanzasDashboardPage({
       .eq('estado', 'activo'),
   ])
 
-  /* ── Cálculo de KPIs ── */
-  const totalFacturado  = (oes ?? []).reduce((s, o) => s + (o.total_cotizacion ?? 0), 0)
+  /* ── Cálculo de KPIs — todo con IVA (valores reales de caja) ── */
+  const totalFacturado  = (oes ?? []).reduce((s, o) => {
+    // Usar total_con_iva si existe, sino calcular
+    return s + (o.total_con_iva ?? Math.round((o.total_cotizacion ?? 0) * 1.19))
+  }, 0)
   const totalRecaudado  = (oes ?? []).reduce((s, o) => {
-    const ant = o.anticipo_recibido ? (o.anticipo_monto ?? 0) : 0
-    const sal = o.saldo_recibido    ? Math.max(0, (o.total_cotizacion ?? 0) - (o.anticipo_monto ?? 0)) : 0
+    const totalIva   = o.total_con_iva ?? Math.round((o.total_cotizacion ?? 0) * 1.19)
+    const anticIva   = Math.round(totalIva * (o.anticipo_porcentaje ?? 50) / 100)
+    const ant = o.anticipo_recibido ? anticIva : 0
+    const sal = o.saldo_recibido    ? Math.max(0, totalIva - anticIva) : 0
     return s + ant + sal
   }, 0)
   const totalPendiente  = totalFacturado - totalRecaudado
@@ -222,9 +227,11 @@ export default async function FinanzasDashboardPage({
             </thead>
             <tbody className="divide-y divide-gray-50">
               {(oes ?? []).map(oe => {
-                const recaudado = (oe.anticipo_recibido ? (oe.anticipo_monto ?? 0) : 0)
-                  + (oe.saldo_recibido ? Math.max(0, (oe.total_cotizacion ?? 0) - (oe.anticipo_monto ?? 0)) : 0)
-                const pendiente = Math.max(0, (oe.total_cotizacion ?? 0) - recaudado)
+                const totalIva  = oe.total_con_iva ?? Math.round((oe.total_cotizacion ?? 0) * 1.19)
+                const anticIva  = Math.round(totalIva * (oe.anticipo_porcentaje ?? 50) / 100)
+                const recaudado = (oe.anticipo_recibido ? anticIva : 0)
+                  + (oe.saldo_recibido ? Math.max(0, totalIva - anticIva) : 0)
+                const pendiente = Math.max(0, totalIva - recaudado)
 
                 return (
                   <tr key={oe.id} className="hover:bg-gray-50 transition-colors">
@@ -237,7 +244,7 @@ export default async function FinanzasDashboardPage({
                       {contactoMap.get(oe.contacto_id ?? '') ?? '—'}
                     </td>
                     <td className="px-5 py-3 text-right font-semibold text-gray-900">
-                      ${fmt(oe.total_cotizacion ?? 0)}
+                      ${fmt(oe.total_con_iva ?? Math.round((oe.total_cotizacion ?? 0) * 1.19))}
                     </td>
                     <td className="px-5 py-3 text-right font-semibold text-emerald-600">
                       ${fmt(recaudado)}

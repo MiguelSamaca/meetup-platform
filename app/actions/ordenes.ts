@@ -55,13 +55,15 @@ export async function crearOrdenEjecucion(cotizacionId: string, contactoId: stri
     orden: number
   }>
 
-  // Total neto de venta (con descuentos)
+  // Total neto de venta (con descuentos) — SIN IVA
   const totalCotizacion = Math.round(
     items.reduce((sum, it) => {
       const bruto = it.cantidad * it.precio_unitario
       return sum + bruto * (1 - (it.descuento ?? 0) / 100)
     }, 0)
   )
+  // Total que el cliente realmente paga (CON IVA 19%)
+  const totalConIva = Math.round(totalCotizacion * 1.19)
 
   // Consecutivo OE-YYYYMM-NNN
   const { count } = await admin
@@ -85,6 +87,7 @@ export async function crearOrdenEjecucion(cotizacionId: string, contactoId: stri
       consecutivo,
       estado:              'activa',
       total_cotizacion:    totalCotizacion,
+      total_con_iva:       totalConIva,
       anticipo_porcentaje,
       anticipo_monto,
     })

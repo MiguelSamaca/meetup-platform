@@ -49,8 +49,8 @@ export default async function FlujoCajaPage() {
     supabase
       .from('ordenes_ejecucion')
       .select(`
-        id, consecutivo, total_cotizacion,
-        anticipo_monto, anticipo_fecha, anticipo_recibido,
+        id, consecutivo, total_cotizacion, total_con_iva,
+        anticipo_porcentaje, anticipo_monto, anticipo_fecha, anticipo_recibido,
         saldo_fecha, saldo_recibido, contacto_id
       `)
       .eq('tenant_id', tid),
@@ -83,19 +83,22 @@ export default async function FlujoCajaPage() {
   /* ── Construir movimientos ── */
   const movimientos: Movimiento[] = []
 
-  /* ENTRADAS: anticipos y saldos de clientes pendientes */
+  /* ENTRADAS: anticipos y saldos de clientes — valores CON IVA (cash real) */
   for (const oe of oes ?? []) {
-    const cliente = contactoMap.get(oe.contacto_id ?? '') ?? 'Cliente'
+    const cliente  = contactoMap.get(oe.contacto_id ?? '') ?? 'Cliente'
+    const totalIva = oe.total_con_iva ?? Math.round((oe.total_cotizacion ?? 0) * 1.19)
+    const anticIva = Math.round(totalIva * (oe.anticipo_porcentaje ?? 50) / 100)
+    const saldoIva = Math.max(0, totalIva - anticIva)
 
     // Anticipo pendiente
-    if (!oe.anticipo_recibido && (oe.anticipo_monto ?? 0) > 0) {
+    if (!oe.anticipo_recibido && anticIva > 0) {
       const fecha = oe.anticipo_fecha
       const mes   = !fecha ? 'sin_fecha' : fecha < hoyStr ? 'vencido' : toMes(fecha)
       movimientos.push({
         tipo:    'entrada',
         concepto: `Anticipo — ${oe.consecutivo}`,
         detalle:  cliente,
-        monto:   oe.anticipo_monto ?? 0,
+        monto:   anticIva,
         fecha,
         mes,
         oeId:    oe.id,
@@ -103,21 +106,18 @@ export default async function FlujoCajaPage() {
     }
 
     // Saldo pendiente (solo si anticipo ya se recibió)
-    if (oe.anticipo_recibido && !oe.saldo_recibido) {
-      const saldoMonto = Math.max(0, (oe.total_cotizacion ?? 0) - (oe.anticipo_monto ?? 0))
-      if (saldoMonto > 0) {
-        const fecha = oe.saldo_fecha
-        const mes   = !fecha ? 'sin_fecha' : fecha < hoyStr ? 'vencido' : toMes(fecha)
-        movimientos.push({
-          tipo:    'entrada',
-          concepto: `Saldo — ${oe.consecutivo}`,
-          detalle:  cliente,
-          monto:   saldoMonto,
-          fecha,
-          mes,
-          oeId:    oe.id,
-        })
-      }
+    if (oe.anticipo_recibido && !oe.saldo_recibido && saldoIva > 0) {
+      const fecha = oe.saldo_fecha
+      const mes   = !fecha ? 'sin_fecha' : fecha < hoyStr ? 'vencido' : toMes(fecha)
+      movimientos.push({
+        tipo:    'entrada',
+        concepto: `Saldo — ${oe.consecutivo}`,
+        detalle:  cliente,
+        monto:   saldoIva,
+        fecha,
+        mes,
+        oeId:    oe.id,
+      })
     }
   }
 
@@ -130,22 +130,23 @@ export default async function FlujoCajaPage() {
     const anticipoPagado = provItems.length > 0 && provItems.every(i => i.anticipo_proveedor_pagado)
     const todosBodega    = provItems.length > 0 && provItems.every(i => i.estado === 'en_bodega')
 
-    // Anticipo proveedor pendiente de girar
+    // Anticipo proveedor pendiente — monto YA incluye IVA (fue calculado sobre total c/IVA)
     if (!anticipoPagado && (prov.anticipo_monto ?? 0) > 0) {
       movimientos.push({
         tipo:    'salida',
         concepto: `Anticipo prov. — ${prov.proveedor}`,
         detalle:  'Sin fecha asignada',
-        monto:   prov.anticipo_monto ?? 0,
+        monto:   prov.anticipo_monto ?? 0,   // ya es c/IVA desde el fix del panel
         fecha:   null,
         mes:     'sin_fecha',
         oeId:    prov.orden_ejecucion_id,
       })
     }
 
-    // Saldo proveedor pendiente
+    // Saldo proveedor pendiente — calcular sobre monto_orden * 1.19
     if (anticipoPagado && !todosBodega) {
-      const saldo = Math.max(0, (prov.monto_orden ?? 0) - (prov.anticipo_monto ?? 0))
+      const montoIva = Math.round((prov.monto_orden ?? 0) * 1.19)
+      const saldo    = Math.max(0, montoIva - (prov.anticipo_monto ?? 0))
       if (saldo > 0) {
         movimientos.push({
           tipo:    'salida',

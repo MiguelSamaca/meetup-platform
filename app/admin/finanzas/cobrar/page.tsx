@@ -59,7 +59,7 @@ export default async function CobrarPage({
   const { data: oes } = await supabase
     .from('ordenes_ejecucion')
     .select(`
-      id, consecutivo, total_cotizacion,
+      id, consecutivo, total_cotizacion, total_con_iva,
       anticipo_porcentaje, anticipo_monto, anticipo_fecha, anticipo_recibido,
       saldo_fecha, saldo_recibido,
       contacto_id, created_at
@@ -76,10 +76,13 @@ export default async function CobrarPage({
 
   /* ── Enriquecer filas ── */
   const rows = (oes ?? []).map(oe => {
-    const saldoMonto = Math.max(0, (oe.total_cotizacion ?? 0) - (oe.anticipo_monto ?? 0))
-    const recaudado  = (oe.anticipo_recibido ? (oe.anticipo_monto ?? 0) : 0)
+    // Usar total_con_iva (valor real que paga el cliente)
+    const totalIva   = oe.total_con_iva ?? Math.round((oe.total_cotizacion ?? 0) * 1.19)
+    const anticIva   = Math.round(totalIva * (oe.anticipo_porcentaje ?? 50) / 100)
+    const saldoMonto = Math.max(0, totalIva - anticIva)
+    const recaudado  = (oe.anticipo_recibido ? anticIva : 0)
                      + (oe.saldo_recibido    ? saldoMonto : 0)
-    const pendiente  = Math.max(0, (oe.total_cotizacion ?? 0) - recaudado)
+    const pendiente  = Math.max(0, totalIva - recaudado)
     const estado     = calcEstado(
       oe.anticipo_recibido,
       oe.saldo_recibido,
@@ -187,10 +190,11 @@ export default async function CobrarPage({
                   </td>
                   <td className="px-5 py-3 font-medium text-gray-800">{r.contactoNombre}</td>
                   <td className="px-5 py-3 text-right font-semibold text-gray-900">
-                    ${fmt(r.total_cotizacion ?? 0)}
+                    ${fmt(r.total_con_iva ?? Math.round((r.total_cotizacion ?? 0) * 1.19))}
+                    <div className="text-[10px] text-gray-400 font-normal">c/IVA</div>
                   </td>
                   <td className="px-5 py-3 text-right text-gray-600">
-                    <div>${fmt(r.anticipo_monto ?? 0)}</div>
+                    <div>${fmt(Math.round((r.total_con_iva ?? Math.round((r.total_cotizacion ?? 0) * 1.19)) * (r.anticipo_porcentaje ?? 50) / 100))}</div>
                     {r.anticipo_fecha && (
                       <div className={`text-[10px] mt-0.5 ${
                         !r.anticipo_recibido && new Date(r.anticipo_fecha) < new Date()
