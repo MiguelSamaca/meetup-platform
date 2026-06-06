@@ -1,7 +1,8 @@
-import { createAdminClient } from '@/lib/supabase/admin'
-import { getCurrentProfile }  from '@/lib/auth'
-import Link                   from 'next/link'
-import SaldoCajaEditor        from '@/components/admin/finanzas/SaldoCajaEditor'
+import { createAdminClient }                  from '@/lib/supabase/admin'
+import { getCurrentProfile }                   from '@/lib/auth'
+import Link                                    from 'next/link'
+import SaldoCajaEditor                         from '@/components/admin/finanzas/SaldoCajaEditor'
+import { getPeriodoIVA, type IVAPeriodicidad } from '@/lib/iva-colombia'
 
 /* ── Helpers ── */
 function fmt(n: number) {
@@ -20,14 +21,15 @@ function toMes(fecha: string | null): string {
 
 /* ── Tipos ── */
 interface Movimiento {
-  tipo:        'entrada' | 'salida'
-  concepto:    string
-  detalle:     string
-  monto:       number
-  fecha:       string | null
-  mes:         string
-  oeId?:       string
+  tipo:         'entrada' | 'salida'
+  concepto:     string
+  detalle:      string
+  monto:        number
+  fecha:        string | null
+  mes:          string
+  oeId?:        string
   esGastoFijo?: boolean
+  esIVA?:       boolean
 }
 
 /* ═══════════════════════════════════════════════════════════════ */
@@ -56,7 +58,7 @@ export default async function FlujoCajaPage({
   ] = await Promise.all([
     supabase
       .from('tenant_config')
-      .select('saldo_caja_actual')
+      .select('saldo_caja_actual, iva_periodicidad')
       .eq('tenant_id', tid)
       .maybeSingle(),
     supabase
@@ -70,7 +72,7 @@ export default async function FlujoCajaPage({
       .select(`
         id, consecutivo, total_cotizacion, total_con_iva,
         anticipo_porcentaje, anticipo_monto, anticipo_fecha, anticipo_recibido,
-        saldo_fecha, saldo_recibido, contacto_id, estado
+        saldo_fecha, saldo_recibido, contacto_id, estado, created_at
       `)
       .eq('tenant_id', tid),
     supabase
@@ -80,15 +82,16 @@ export default async function FlujoCajaPage({
       .from('gastos')
       .select('id, proyecto_id, descripcion, monto, categoria, fecha')
       .eq('tenant_id', tid)
-      .order('fecha'),          // Todos — filtramos pasados/futuros en código
+      .order('fecha'),
   ])
 
-  const saldoCajaActual  = (config as any)?.saldo_caja_actual ?? 0
+  const saldoCajaActual  = (config as any)?.saldo_caja_actual  ?? 0
+  const ivaPeriodicidad: IVAPeriodicidad = (config as any)?.iva_periodicidad ?? 'cuatrimestral'
   const totalGastosFijos = (gastosFijos ?? []).reduce((s, g) => s + g.monto, 0)
 
   /* Gastos: separar pasados (para cálculo de caja) de futuros (para timeline) */
-  const gastosPasados  = (gastos ?? []).filter(g => !g.fecha || g.fecha <= hoyStr)
-  const gastosFuturos  = (gastos ?? []).filter(g => g.fecha  &&  g.fecha  > hoyStr)
+  const gastosPasados = (gastos ?? []).filter(g => !g.fecha || g.fecha <= hoyStr)
+  const gastosFuturos = (gastos ?? []).filter(g => g.fecha  &&  g.fecha  > hoyStr)
 
   /* Contactos */
   const contactoIds = [...new Set((oes ?? []).map(o => o.contacto_id).filter(Boolean))]
@@ -97,14 +100,67 @@ export default async function FlujoCajaPage({
     : { data: [] }
   const contactoMap = new Map((contactos ?? []).map(c => [c.id, c.nombre]))
 
-  /* Items para estado anticipo proveedor */
+  /* Items — incluye campos de costo para IVA descontable */
   const oeIds = (oes ?? []).map(o => o.id)
   const { data: oeItems } = oeIds.length > 0
     ? await supabase
         .from('oe_items')
-        .select('orden_ejecucion_id, proveedor, estado, anticipo_proveedor_pagado')
+        .select('orden_ejecucion_id, proveedor, estado, anticipo_proveedor_pagado, cantidad, costo_unitario, moneda_costo, trm')
         .in('orden_ejecucion_id', oeIds)
     : { data: [] }
+
+  /* ── IVA Colombia: cálculo neto por OE y agrupación por período DIAN ── */
+  // Agrupamos items por OE para calcular el IVA descontable de equipos
+  const oeItemsMap = new Map<string, Array<{
+    cantidad: number; costo_unitario: number | null; moneda_costo: string | null; trm: number | null
+  }>>()
+  for (const it of oeItems ?? []) {
+    const list = oeItemsMap.get(it.orden_ejecucion_id) ?? []
+    list.push(it)
+    oeItemsMap.set(it.orden_ejecucion_id, list)
+  }
+
+  interface IVAOEInfo {
+    ivaGenerado:    number
+    ivaDescontable: number
+    ivaNeto:        number
+    periodo:        ReturnType<typeof getPeriodoIVA>
+  }
+  const ivaByOE     = new Map<string, IVAOEInfo>()
+  const ivaByPeriodo = new Map<string, {
+    key: string; label: string; mesPago: string; fechaPago: string; total: number
+  }>()
+
+  for (const oe of oes ?? []) {
+    // IVA generado: 19 % sobre el valor de venta (sin IVA)
+    const ivaGenerado = Math.round((oe.total_cotizacion ?? 0) * 0.19)
+
+    // IVA descontable: 19 % sobre el costo de equipos adquiridos a proveedores
+    const itemsOE = oeItemsMap.get(oe.id) ?? []
+    const costoEquipos = itemsOE.reduce((s, it) => {
+      const cu = it.costo_unitario ?? 0
+      const qty = it.cantidad ?? 1
+      const costoCOP = it.moneda_costo === 'USD'
+        ? cu * (it.trm ?? 4000)
+        : cu
+      return s + qty * costoCOP
+    }, 0)
+    const ivaDescontable = Math.round(costoEquipos * 0.19)
+
+    // IVA neto a declarar y pagar a DIAN (nunca negativo)
+    const ivaNeto  = Math.max(0, ivaGenerado - ivaDescontable)
+    const periodo  = getPeriodoIVA(oe.created_at ?? hoyStr, ivaPeriodicidad)
+
+    ivaByOE.set(oe.id, { ivaGenerado, ivaDescontable, ivaNeto, periodo })
+
+    if (ivaNeto > 0) {
+      const ex = ivaByPeriodo.get(periodo.key)
+      if (ex) { ex.total += ivaNeto }
+      else    { ivaByPeriodo.set(periodo.key, { ...periodo, total: ivaNeto }) }
+    }
+  }
+
+  const totalIVAPendiente = [...ivaByPeriodo.values()].reduce((s, p) => s + p.total, 0)
 
   /* ── Cálculo automático de caja (transacciones reales registradas) ── */
   const oeIdsSetCalc = new Set((oes ?? []).map(o => o.id))
@@ -119,7 +175,7 @@ export default async function FlujoCajaPage({
       + (o.saldo_recibido    ? saldoIva : 0)
   }, 0)
 
-  // Salidas: anticipos pagados a proveedores (anticipo_monto ya es c/IVA)
+  // Salidas: anticipos pagados a proveedores
   const salidasProveedores = (proveedores ?? []).reduce((s, prov) => {
     if (!oeIdsSetCalc.has(prov.orden_ejecucion_id)) return s
     const provItems = (oeItems ?? []).filter(
@@ -129,7 +185,7 @@ export default async function FlujoCajaPage({
     return s + (anticipoPagado ? (prov.anticipo_monto ?? 0) : 0)
   }, 0)
 
-  // Salidas: gastos ya realizados (con fecha pasada o sin fecha)
+  // Salidas: gastos ya realizados
   const salidasGastosRealizados = gastosPasados.reduce((s, g) => s + (g.monto ?? 0), 0)
 
   const saldoCalculado = Math.round(entradasRecibidas - salidasProveedores - salidasGastosRealizados)
@@ -168,27 +224,36 @@ export default async function FlujoCajaPage({
       }
 
       const porPagarProv = Math.max(0, costoProvTotal - provPagado)
-      const flujoNeto    = porCobrar - porPagarProv
+
+      // IVA neto que debe apartar este proyecto para DIAN
+      const ivaOE = ivaByOE.get(oe.id)
+      const ivaNeto    = ivaOE?.ivaNeto ?? 0
+      const ivaPeriodo = ivaOE?.periodo.label ?? '—'
+      const ivaFecha   = ivaOE?.periodo.fechaPago ?? null
+
+      const flujoNeto = porCobrar - porPagarProv - ivaNeto
 
       return {
         ...oe,
         totalIva, cobrado, porCobrar,
         costoProvTotal, provPagado, porPagarProv,
+        ivaNeto, ivaPeriodo, ivaFecha,
         flujoNeto,
         cliente: contactoMap.get(oe.contacto_id ?? '') ?? '—',
       }
     }).sort((a, b) => (b.flujoNeto - a.flujoNeto))
 
-    const totPorCobrar  = porProyecto.reduce((s, r) => s + r.porCobrar,  0)
+    const totPorCobrar  = porProyecto.reduce((s, r) => s + r.porCobrar,    0)
     const totPorPagar   = porProyecto.reduce((s, r) => s + r.porPagarProv, 0)
-    const posicionNeta  = totPorCobrar - totPorPagar
+    const totIVAOEs     = porProyecto.reduce((s, r) => s + r.ivaNeto,      0)
+    const posicionNeta  = totPorCobrar - totPorPagar - totIVAOEs
 
     return (
       <div>
         <Header vistaActual="proyectos" />
 
         {/* KPIs */}
-        <div className="grid grid-cols-3 gap-4 mb-8">
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
           <div className="bg-white rounded-xl border border-emerald-200 p-5">
             <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-2">Por cobrar (total)</p>
             <p className="text-2xl font-bold text-emerald-600">${fmt(totPorCobrar)}</p>
@@ -197,11 +262,17 @@ export default async function FlujoCajaPage({
             <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-2">Por pagar prov. (total)</p>
             <p className="text-2xl font-bold text-red-600">${fmt(totPorPagar)}</p>
           </div>
+          <div className="bg-white rounded-xl border border-violet-200 p-5">
+            <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-2">IVA DIAN (total OEs)</p>
+            <p className="text-2xl font-bold text-violet-600">${fmt(totIVAOEs)}</p>
+            <p className="text-xs text-gray-400 mt-1">IVA neto a declarar</p>
+          </div>
           <div className={`rounded-xl border p-5 ${posicionNeta >= 0 ? 'bg-emerald-50 border-emerald-200' : 'bg-red-50 border-red-200'}`}>
-            <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-2">Posición neta por proyecto</p>
+            <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-2">Posición neta</p>
             <p className={`text-2xl font-bold ${posicionNeta >= 0 ? 'text-emerald-700' : 'text-red-700'}`}>
               {posicionNeta >= 0 ? '+' : ''}${fmt(posicionNeta)}
             </p>
+            <p className="text-xs text-gray-400 mt-1">Cobros − Prov − IVA DIAN</p>
           </div>
         </div>
 
@@ -209,7 +280,7 @@ export default async function FlujoCajaPage({
         <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
           <div className="px-5 py-4 border-b border-gray-100">
             <h2 className="font-semibold text-gray-800">Posición de caja por Orden de Ejecución</h2>
-            <p className="text-xs text-gray-400 mt-0.5">Todos los valores con IVA incluido</p>
+            <p className="text-xs text-gray-400 mt-0.5">Valores con IVA incluido · IVA DIAN = IVA generado − IVA descontable de equipos</p>
           </div>
           {porProyecto.length === 0 ? (
             <p className="px-5 py-10 text-center text-sm text-gray-400">Sin órdenes de ejecución</p>
@@ -224,6 +295,7 @@ export default async function FlujoCajaPage({
                   <th className="text-right px-4 py-3 text-xs font-semibold text-emerald-600 uppercase">Por cobrar</th>
                   <th className="text-right px-4 py-3 text-xs font-semibold text-gray-500 uppercase">Costo prov</th>
                   <th className="text-right px-4 py-3 text-xs font-semibold text-red-500 uppercase">Por pagar</th>
+                  <th className="text-right px-4 py-3 text-xs font-semibold text-violet-600 uppercase">IVA DIAN</th>
                   <th className="text-right px-4 py-3 text-xs font-semibold text-gray-500 uppercase">Flujo neto</th>
                 </tr>
               </thead>
@@ -249,6 +321,14 @@ export default async function FlujoCajaPage({
                     </td>
                     <td className="px-4 py-3 text-right font-semibold text-red-500">
                       {r.porPagarProv > 0 ? `$${fmt(r.porPagarProv)}` : <span className="text-gray-300">—</span>}
+                    </td>
+                    <td className="px-4 py-3 text-right">
+                      {r.ivaNeto > 0 ? (
+                        <div>
+                          <span className="font-semibold text-violet-600">${fmt(r.ivaNeto)}</span>
+                          <p className="text-[10px] text-violet-400 whitespace-nowrap">{r.ivaPeriodo}</p>
+                        </div>
+                      ) : <span className="text-gray-300">—</span>}
                     </td>
                     <td className="px-4 py-3 text-right">
                       <span className={`font-bold text-sm ${
@@ -277,6 +357,9 @@ export default async function FlujoCajaPage({
                   <td className="px-4 py-3 text-right font-bold text-red-500">
                     ${fmt(totPorPagar)}
                   </td>
+                  <td className="px-4 py-3 text-right font-bold text-violet-600">
+                    ${fmt(totIVAOEs)}
+                  </td>
                   <td className={`px-4 py-3 text-right font-bold text-sm ${
                     posicionNeta >= 0 ? 'text-emerald-700' : 'text-red-600'
                   }`}>
@@ -289,7 +372,7 @@ export default async function FlujoCajaPage({
         </div>
 
         <p className="mt-6 text-xs text-gray-400 text-center">
-          Flujo neto = Por cobrar del cliente − Por pagar al proveedor · Valores con IVA incluido
+          Flujo neto = Por cobrar − Por pagar prov − IVA DIAN · IVA neto = IVA generado (19% venta) − IVA descontable (19% costo equipos)
         </p>
       </div>
     )
@@ -330,7 +413,7 @@ export default async function FlujoCajaPage({
 
   /* SALIDAS: pagos a proveedores — mes estimado según estado del pago */
   const oeIdsSet = new Set((oes ?? []).map(o => o.id))
-  const oeMap    = new Map((oes ?? []).map(o => [o.id, o]))   // para lookup de fechas
+  const oeMap    = new Map((oes ?? []).map(o => [o.id, o]))
 
   for (const prov of proveedores ?? []) {
     if (!oeIdsSet.has(prov.orden_ejecucion_id)) continue
@@ -341,17 +424,14 @@ export default async function FlujoCajaPage({
     const todosBodega    = provItems.length > 0 && provItems.every(i => i.estado === 'en_bodega')
     const oe             = oeMap.get(prov.orden_ejecucion_id)
 
-    // Anticipo pendiente → mes actual (hay que girarlo pronto)
     if (!anticipoPagado && (prov.anticipo_monto ?? 0) > 0) {
       movimientos.push({
         tipo: 'salida', concepto: `Anticipo prov. — ${prov.proveedor}`,
         detalle: 'Estimado mes actual', monto: prov.anticipo_monto ?? 0,
         fecha: null, mes: mesHoy, oeId: prov.orden_ejecucion_id,
-        esGastoFijo: false,
       })
     }
 
-    // Saldo pendiente → mes del saldo del cliente (lógica: primero cobra el cliente, luego paga prov)
     if (anticipoPagado && !todosBodega) {
       const saldo = Math.max(0, Math.round((prov.monto_orden ?? 0) * 1.19) - (prov.anticipo_monto ?? 0))
       if (saldo > 0) {
@@ -363,13 +443,12 @@ export default async function FlujoCajaPage({
           tipo: 'salida', concepto: `Saldo prov. — ${prov.proveedor}`,
           detalle: saldoFechaOE ? 'Al cobrar saldo del cliente' : 'Estimado mes actual',
           monto: saldo, fecha: null, mes: mesPago, oeId: prov.orden_ejecucion_id,
-          esGastoFijo: false,
         })
       }
     }
   }
 
-  /* SALIDAS: gastos puntuales futuros (del módulo de proyectos) */
+  /* SALIDAS: gastos puntuales futuros */
   for (const g of gastosFuturos) {
     const mes = !g.fecha ? 'sin_fecha' : toMes(g.fecha)
     movimientos.push({
@@ -379,7 +458,7 @@ export default async function FlujoCajaPage({
     })
   }
 
-  /* SALIDAS: gastos fijos → se agregan a cada mes del horizonte */
+  /* SALIDAS: gastos fijos → un movimiento por mes en el horizonte */
   for (const mes of horizonte) {
     for (const gf of gastosFijos ?? []) {
       movimientos.push({
@@ -389,6 +468,24 @@ export default async function FlujoCajaPage({
         mes: mes.key, esGastoFijo: true,
       })
     }
+  }
+
+  /* SALIDAS: IVA DIAN — asignado al mes de vencimiento del período */
+  for (const [, pd] of ivaByPeriodo) {
+    const mes = pd.mesPago < mesHoy
+      ? 'vencido'
+      : horizonteKeys.has(pd.mesPago)
+      ? pd.mesPago
+      : 'sin_fecha'
+    movimientos.push({
+      tipo: 'salida',
+      concepto: `IVA DIAN — ${pd.label}`,
+      detalle: `Período ${ivaPeriodicidad} · Vence ~${new Date(pd.fechaPago + 'T12:00:00').toLocaleDateString('es-CO')}`,
+      monto: pd.total,
+      fecha: pd.fechaPago,
+      mes,
+      esIVA: true,
+    })
   }
 
   /* ── Agrupar por mes ── */
@@ -405,15 +502,20 @@ export default async function FlujoCajaPage({
   }
 
   const grupos = mesesOrden.map(mes => {
-    const movs        = movimientos.filter(m => m.mes === mes)
-    const entradas    = movs.filter(m => m.tipo === 'entrada')
-    const salidas     = movs.filter(m => m.tipo === 'salida')
-    const gastosFijosMovs = salidas.filter(m => m.esGastoFijo)
-    const otrasMovs   = salidas.filter(m => !m.esGastoFijo)
-    const totEnt      = entradas.reduce((s, m) => s + m.monto, 0)
-    const totSal      = salidas.reduce((s, m)  => s + m.monto, 0)
-    const totGF       = gastosFijosMovs.reduce((s, m) => s + m.monto, 0)
-    return { mes, entradas, salidas: otrasMovs, gastosFijosMovs, totEnt, totSal, totGF, balance: totEnt - totSal }
+    const movs            = movimientos.filter(m => m.mes === mes)
+    const entradas        = movs.filter(m => m.tipo === 'entrada')
+    const salidas         = movs.filter(m => m.tipo === 'salida')
+    const gastosFijosMovs = salidas.filter(m =>  m.esGastoFijo)
+    const ivaMovs         = salidas.filter(m =>  m.esIVA)
+    const otrasMovs       = salidas.filter(m => !m.esGastoFijo && !m.esIVA)
+    const totEnt          = entradas.reduce((s, m) => s + m.monto, 0)
+    const totSal          = salidas.reduce((s, m)  => s + m.monto, 0)
+    const totGF           = gastosFijosMovs.reduce((s, m) => s + m.monto, 0)
+    const totIVA          = ivaMovs.reduce((s, m) => s + m.monto, 0)
+    return {
+      mes, entradas, salidas: otrasMovs, gastosFijosMovs, ivaMovs,
+      totEnt, totSal, totGF, totIVA, balance: totEnt - totSal,
+    }
   })
 
   /* Balance acumulado — arranca desde saldo en caja actual */
@@ -425,7 +527,7 @@ export default async function FlujoCajaPage({
     return { ...g, saldoInicio, saldoFin: acum }
   })
 
-  /* ── Proyección mensual (para las cards de resumen) ── */
+  /* ── Proyección mensual ── */
   const cobrosPorMes = new Map<string, number>()
   for (const oe of oes ?? []) {
     const totalIva = oe.total_con_iva ?? Math.round((oe.total_cotizacion ?? 0) * 1.19)
@@ -441,7 +543,7 @@ export default async function FlujoCajaPage({
     }
   }
 
-  /* Pagos a proveedor por mes estimado (para proyección) */
+  /* Pagos a proveedor por mes */
   const pagosProvPorMes = new Map<string, number>()
   for (const prov of proveedores ?? []) {
     if (!oeIdsSet.has(prov.orden_ejecucion_id)) continue
@@ -467,35 +569,43 @@ export default async function FlujoCajaPage({
     }
   }
 
-  // La proyección usa el valor guardado manualmente;
-  // si aún no se ha editado (= 0), usa el cálculo automático como punto de partida
+  /* IVA DIAN por mes (para proyección) */
+  const ivaProyeccionPorMes = new Map<string, number>()
+  for (const [, pd] of ivaByPeriodo) {
+    if (horizonteKeys.has(pd.mesPago)) {
+      ivaProyeccionPorMes.set(pd.mesPago, (ivaProyeccionPorMes.get(pd.mesPago) ?? 0) + pd.total)
+    }
+  }
+
   const saldoBaseProyeccion = saldoCajaActual !== 0 ? saldoCajaActual : saldoCalculado
   let saldoRol = saldoBaseProyeccion
   const proyeccion = horizonte.map(m => {
     const cobros    = cobrosPorMes.get(m.key) ?? 0
     const pagosProv = pagosProvPorMes.get(m.key) ?? 0
+    const ivaDIAN   = ivaProyeccionPorMes.get(m.key) ?? 0
     const gastos    = totalGastosFijos
     const saldoInicio = saldoRol
-    const saldoFin  = saldoInicio + cobros - pagosProv - gastos
+    const saldoFin  = saldoInicio + cobros - pagosProv - ivaDIAN - gastos
     saldoRol = saldoFin
-    return { ...m, cobros, pagosProv, gastos, saldoInicio, saldoFin, neto: cobros - pagosProv - gastos }
+    return { ...m, cobros, pagosProv, ivaDIAN, gastos, saldoInicio, saldoFin, neto: cobros - pagosProv - ivaDIAN - gastos }
   })
 
   /* KPIs globales */
   const totEntradasGlobal = movimientos.filter(m => m.tipo === 'entrada').reduce((s, m) => s + m.monto, 0)
-  const totSalidasGlobal  = movimientos.filter(m => m.tipo === 'salida').reduce((s, m) => s + m.monto, 0)
   const vencidos          = movimientos.filter(m => m.mes === 'vencido')
   const totVencido        = vencidos.filter(m => m.tipo === 'entrada').reduce((s, m) => s + m.monto, 0)
-
-  /* Obligaciones pendientes a proveedores (ya distribuidas en meses) */
   const totObligacionesProv = [...pagosProvPorMes.values()].reduce((s, v) => s + v, 0)
+
+  /* Próximo vencimiento IVA */
+  const ivaPeriodsArr = [...ivaByPeriodo.values()].sort((a, b) => a.mesPago.localeCompare(b.mesPago))
+  const proximoIVA    = ivaPeriodsArr[0] ?? null
 
   return (
     <div>
       <Header vistaActual="general" />
 
-      {/* Banner caja + gastos fijos */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-8">
+      {/* Banner superior: caja + gastos fijos + IVA DIAN */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
         {/* Saldo en caja */}
         <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-5">
           <div className="flex items-start justify-between mb-3">
@@ -508,9 +618,9 @@ export default async function FlujoCajaPage({
             saldoActual={saldoCajaActual}
             saldoCalculado={saldoCalculado}
             detalleCaja={{
-              entradas:       entradasRecibidas,
-              salidasProv:    salidasProveedores,
-              salidasGastos:  salidasGastosRealizados,
+              entradas:      entradasRecibidas,
+              salidasProv:   salidasProveedores,
+              salidasGastos: salidasGastosRealizados,
             }}
           />
           <p className="text-xs text-emerald-600 mt-2">
@@ -534,13 +644,39 @@ export default async function FlujoCajaPage({
               ⚙️ Gestionar
             </Link>
           </div>
-          <p className="text-2xl font-bold text-amber-800">${fmt(totalGastosFijos)}<span className="text-sm font-normal text-amber-600">/mes</span></p>
+          <p className="text-2xl font-bold text-amber-800">
+            ${fmt(totalGastosFijos)}<span className="text-sm font-normal text-amber-600">/mes</span>
+          </p>
           {(gastosFijos ?? []).length > 0 && (
             <p className="text-xs text-amber-600 mt-2 truncate">
               {(gastosFijos ?? []).slice(0, 4).map(g => g.nombre).join(' · ')}
               {(gastosFijos ?? []).length > 4 && ` · +${(gastosFijos ?? []).length - 4} más`}
             </p>
           )}
+        </div>
+
+        {/* IVA DIAN */}
+        <div className="bg-violet-50 border border-violet-200 rounded-xl p-5">
+          <div className="flex items-start justify-between mb-3">
+            <div>
+              <p className="text-xs font-semibold text-violet-700 uppercase tracking-wide">🏛️ IVA DIAN pendiente</p>
+              <p className="text-xs text-violet-600 mt-0.5 capitalize">Régimen: {ivaPeriodicidad}</p>
+            </div>
+          </div>
+          <p className="text-2xl font-bold text-violet-800">${fmt(totalIVAPendiente)}</p>
+          <div className="mt-2 space-y-1">
+            {ivaPeriodsArr.length === 0 ? (
+              <p className="text-xs text-violet-400">Sin OEs con IVA calculado</p>
+            ) : (
+              ivaPeriodsArr.map(pd => (
+                <div key={pd.key} className="text-xs text-violet-600 flex justify-between">
+                  <span>{pd.label}</span>
+                  <span className="font-semibold">${fmt(pd.total)} · vence {new Date(pd.fechaPago + 'T12:00:00').toLocaleDateString('es-CO')}</span>
+                </div>
+              ))
+            )}
+          </div>
+          <p className="text-xs text-violet-400 mt-2">IVA generado − IVA descontable de equipos</p>
         </div>
       </div>
 
@@ -559,7 +695,7 @@ export default async function FlujoCajaPage({
         <div className="bg-white rounded-xl border border-gray-200 p-5">
           <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-2">Obligaciones prov.</p>
           <p className="text-2xl font-bold text-red-600">${fmt(totObligacionesProv)}</p>
-          <p className="text-xs text-gray-400 mt-1">Sin fecha asignada aún</p>
+          <p className="text-xs text-gray-400 mt-1">Pagos pendientes a proveedores</p>
         </div>
         <div className={`rounded-xl border p-5 ${totVencido > 0 ? 'bg-red-50 border-red-300' : 'bg-gray-50 border-gray-200'}`}>
           <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-2">⚠ Cobros vencidos</p>
@@ -576,20 +712,20 @@ export default async function FlujoCajaPage({
           <div>
             <h2 className="font-semibold text-gray-800">Proyección de caja — mes a mes</h2>
             <p className="text-xs text-gray-400 mt-0.5">
-              Arranca desde caja actual · descuenta gastos fijos mensualmente · suma cobros con fecha
+              Arranca desde caja actual · descuenta gastos fijos + IVA DIAN + pagos prov. · suma cobros con fecha
             </p>
           </div>
         </div>
         <div className="overflow-x-auto">
           <div className="flex gap-0 min-w-max">
             {proyeccion.map((m, idx) => {
-              const saldoOk   = m.saldoFin >= 0
-              const esActual  = m.isCurrentMonth
-              const barHeight = Math.min(100, Math.abs(m.saldoFin) / Math.max(...proyeccion.map(p => Math.abs(p.saldoFin)), 1) * 80)
+              const saldoOk  = m.saldoFin >= 0
+              const esActual = m.isCurrentMonth
+              const barH     = Math.min(100, Math.abs(m.saldoFin) / Math.max(...proyeccion.map(p => Math.abs(p.saldoFin)), 1) * 80)
               return (
                 <div
                   key={m.key}
-                  className={`flex flex-col p-4 border-r border-gray-100 min-w-[160px] ${
+                  className={`flex flex-col p-4 border-r border-gray-100 min-w-[170px] ${
                     esActual ? 'bg-blue-50' : 'bg-white'
                   } ${idx === proyeccion.length - 1 ? 'border-r-0' : ''}`}
                 >
@@ -614,6 +750,12 @@ export default async function FlujoCajaPage({
                         <span className="font-semibold">−${fmt(m.pagosProv)}</span>
                       </div>
                     )}
+                    {m.ivaDIAN > 0 && (
+                      <div className="flex justify-between text-violet-600">
+                        <span>↓ IVA DIAN</span>
+                        <span className="font-semibold">−${fmt(m.ivaDIAN)}</span>
+                      </div>
+                    )}
                     {m.gastos > 0 && (
                       <div className="flex justify-between text-amber-600">
                         <span>↓ G.Fijos</span>
@@ -633,7 +775,7 @@ export default async function FlujoCajaPage({
                   <div className="mt-3 flex items-end justify-center h-8">
                     <div
                       className={`w-full rounded-sm transition-all ${saldoOk ? 'bg-emerald-400' : 'bg-red-400'}`}
-                      style={{ height: `${Math.max(4, barHeight)}%`, minHeight: '4px' }}
+                      style={{ height: `${Math.max(4, barH)}%`, minHeight: '4px' }}
                     />
                   </div>
                 </div>
@@ -672,6 +814,9 @@ export default async function FlujoCajaPage({
               ? `📅 ${mesLabel(g.mes)} (mes actual)`
               : mesLabel(g.mes)
 
+            const totalMovsCount =
+              g.entradas.length + g.salidas.length + g.gastosFijosMovs.length + g.ivaMovs.length
+
             return (
               <details
                 key={g.mes}
@@ -681,7 +826,6 @@ export default async function FlujoCajaPage({
                 {/* Header mes — summary colapsable */}
                 <summary className={`px-5 py-3.5 border-b border-inherit flex flex-wrap items-center justify-between gap-3 cursor-pointer list-none select-none ${headerCls}`}>
                   <div className="flex items-center gap-2 min-w-0">
-                    {/* Indicador expand/collapse */}
                     <span className="text-gray-400 text-xs font-bold transition-transform group-open:rotate-90 shrink-0">▶</span>
                     <div className="min-w-0">
                       <h3 className="font-bold text-gray-900 text-sm">{titulo}</h3>
@@ -689,6 +833,7 @@ export default async function FlujoCajaPage({
                         {g.entradas.length} cobro{g.entradas.length !== 1 ? 's' : ''} ·{' '}
                         {g.salidas.length} pago{g.salidas.length !== 1 ? 's' : ''} prov.
                         {g.gastosFijosMovs.length > 0 && ` · ${g.gastosFijosMovs.length} gasto${g.gastosFijosMovs.length !== 1 ? 's' : ''} fijo${g.gastosFijosMovs.length !== 1 ? 's' : ''}`}
+                        {g.ivaMovs.length > 0 && ` · IVA DIAN`}
                       </p>
                     </div>
                   </div>
@@ -701,6 +846,12 @@ export default async function FlujoCajaPage({
                       <p className="text-xs text-gray-400">Salidas</p>
                       <p className="font-bold text-red-600">−${fmt(g.totSal)}</p>
                     </div>
+                    {g.totIVA > 0 && (
+                      <div className="text-right">
+                        <p className="text-xs text-gray-400">IVA DIAN</p>
+                        <p className="font-bold text-violet-600">−${fmt(g.totIVA)}</p>
+                      </div>
+                    )}
                     <div className="text-right border-l border-gray-200 pl-4">
                       <p className="text-xs text-gray-400">Neto mes</p>
                       <p className={`font-bold ${g.balance >= 0 ? 'text-gray-900' : 'text-red-600'}`}>
@@ -771,9 +922,7 @@ export default async function FlujoCajaPage({
                         <span className="text-xs font-semibold text-amber-600 uppercase tracking-wide">
                           Gastos fijos recurrentes
                         </span>
-                        <span className="text-xs font-bold text-amber-700">
-                          −${fmt(g.totGF)}
-                        </span>
+                        <span className="text-xs font-bold text-amber-700">−${fmt(g.totGF)}</span>
                       </div>
                       {g.gastosFijosMovs.map((m, i) => (
                         <div key={`gf-${i}`} className="flex items-center px-5 py-2 hover:bg-amber-50/60 transition-colors">
@@ -787,6 +936,33 @@ export default async function FlujoCajaPage({
                       ))}
                     </div>
                   )}
+
+                  {/* IVA DIAN — bloque separado */}
+                  {g.ivaMovs.length > 0 && (
+                    <div className="bg-violet-50/40 border-t border-violet-100">
+                      <div className="px-5 py-1.5 flex items-center justify-between">
+                        <span className="text-xs font-semibold text-violet-600 uppercase tracking-wide">
+                          🏛️ IVA DIAN por declarar
+                        </span>
+                        <span className="text-xs font-bold text-violet-700">−${fmt(g.totIVA)}</span>
+                      </div>
+                      {g.ivaMovs.map((m, i) => (
+                        <div key={`iva-${i}`} className="flex items-center px-5 py-2 hover:bg-violet-50/60 transition-colors">
+                          <span className="text-violet-500 text-xs font-bold w-5">↓</span>
+                          <div className="flex-1 min-w-0 ml-2">
+                            <p className="text-sm font-medium text-gray-700 truncate">{m.concepto}</p>
+                            <p className="text-xs text-violet-500">{m.detalle}</p>
+                          </div>
+                          {m.fecha && (
+                            <span className="text-xs text-gray-400 mr-4">
+                              Vence: {new Date(m.fecha + 'T12:00:00').toLocaleDateString('es-CO')}
+                            </span>
+                          )}
+                          <span className="font-semibold text-violet-600 text-sm w-36 text-right">−${fmt(m.monto)}</span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
                 </div>
               </details>
             )
@@ -795,8 +971,8 @@ export default async function FlujoCajaPage({
       )}
 
       <p className="mt-6 text-xs text-gray-400 text-center">
-        El saldo proyectado por mes parte de tu caja actual y descuenta pagos a proveedores y gastos fijos. <br />
-        Haz clic en cada mes para ver el detalle de movimientos.
+        Saldo proyectado parte de caja actual · descuenta pagos a prov., IVA DIAN y gastos fijos · suma cobros con fecha. <br />
+        IVA neto = IVA generado (19% sobre venta) − IVA descontable (19% sobre costo equipos adquiridos). Vencimientos aprox. según DIAN.
       </p>
     </div>
   )
@@ -813,8 +989,8 @@ function Header({ vistaActual }: { vistaActual: 'general' | 'proyectos' }) {
         <h1 className="text-2xl font-bold text-gray-900">Flujo de caja</h1>
         <p className="text-sm text-gray-500 mt-1">
           {vistaActual === 'general'
-            ? 'Proyección real de caja: saldo actual + cobros − gastos fijos − pagos'
-            : 'Posición de caja por Orden de Ejecución'}
+            ? 'Proyección real: saldo actual + cobros − gastos fijos − IVA DIAN − pagos proveedores'
+            : 'Posición de caja por Orden de Ejecución · incluye IVA neto a declarar a DIAN'}
         </p>
       </div>
       {/* Tabs de vista */}

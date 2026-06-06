@@ -1,9 +1,10 @@
-import { createAdminClient } from '@/lib/supabase/admin'
-import { getCurrentProfile } from '@/lib/auth'
-import { Suspense } from 'react'
-import PeriodoSelector from '@/components/admin/finanzas/PeriodoSelector'
-import SaldoCajaEditor from '@/components/admin/finanzas/SaldoCajaEditor'
-import Link from 'next/link'
+import { createAdminClient }     from '@/lib/supabase/admin'
+import { getCurrentProfile }      from '@/lib/auth'
+import { Suspense }               from 'react'
+import PeriodoSelector            from '@/components/admin/finanzas/PeriodoSelector'
+import SaldoCajaEditor            from '@/components/admin/finanzas/SaldoCajaEditor'
+import Link                       from 'next/link'
+import { getPeriodoActual }       from '@/lib/iva-colombia'
 
 /* ── Helpers ── */
 function fmt(n: number) {
@@ -120,6 +121,9 @@ export default async function FinanzasDashboardPage({
   const saldoCajaActual  = (configCaja as any)?.saldo_caja_actual ?? 0
   const totalGastosFijos = (gastosFijos ?? []).reduce((s, g) => s + (g.monto ?? 0), 0)
 
+  /* ── IVA Colombia: período vigente para el recordatorio ── */
+  const periodoIVAActual = getPeriodoActual()
+
   /* ── Cálculo de KPIs — todo con IVA (valores reales de caja) ── */
   const totalFacturado  = (oes ?? []).reduce((s, o) => {
     // Usar total_con_iva si existe, sino calcular
@@ -216,6 +220,32 @@ export default async function FinanzasDashboardPage({
           </div>
         </div>
       )}
+
+      {/* Recordatorio IVA DIAN */}
+      <div className="bg-violet-50 border border-violet-200 rounded-xl p-4 mb-4">
+        <div className="flex flex-wrap items-center justify-between gap-4">
+          <div>
+            <p className="text-xs font-semibold text-violet-700 uppercase tracking-wide mb-1">
+              🏛️ IVA DIAN — Régimen cuatrimestral
+            </p>
+            <div className="flex flex-wrap gap-4 text-xs text-violet-700">
+              <span>Período actual: <strong>{periodoIVAActual.label}</strong></span>
+              <span>·</span>
+              <span>Próximo vencimiento: <strong>
+                {new Date(periodoIVAActual.fechaPago + 'T12:00:00').toLocaleDateString('es-CO', {
+                  day: 'numeric', month: 'long', year: 'numeric'
+                })}
+              </strong> (fecha aprox. según NIT)</span>
+            </div>
+          </div>
+          <Link
+            href="/admin/finanzas/flujo"
+            className="text-xs bg-violet-600 text-white px-3 py-2 rounded-lg hover:bg-violet-700 transition-colors font-semibold whitespace-nowrap"
+          >
+            Ver IVA por proyecto →
+          </Link>
+        </div>
+      </div>
 
       {/* Accesos rápidos a submódulos */}
       <div className="grid grid-cols-2 lg:grid-cols-5 gap-3 mb-8">
