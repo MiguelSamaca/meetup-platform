@@ -328,8 +328,10 @@ export default async function FlujoCajaPage({
     }
   }
 
-  /* SALIDAS: pagos a proveedores (sin fecha asignada → sin_fecha) */
+  /* SALIDAS: pagos a proveedores — mes estimado según estado del pago */
   const oeIdsSet = new Set((oes ?? []).map(o => o.id))
+  const oeMap    = new Map((oes ?? []).map(o => [o.id, o]))   // para lookup de fechas
+
   for (const prov of proveedores ?? []) {
     if (!oeIdsSet.has(prov.orden_ejecucion_id)) continue
     const provItems = (oeItems ?? []).filter(
@@ -337,22 +339,31 @@ export default async function FlujoCajaPage({
     )
     const anticipoPagado = provItems.length > 0 && provItems.every(i => i.anticipo_proveedor_pagado)
     const todosBodega    = provItems.length > 0 && provItems.every(i => i.estado === 'en_bodega')
+    const oe             = oeMap.get(prov.orden_ejecucion_id)
 
+    // Anticipo pendiente → mes actual (hay que girarlo pronto)
     if (!anticipoPagado && (prov.anticipo_monto ?? 0) > 0) {
       movimientos.push({
         tipo: 'salida', concepto: `Anticipo prov. — ${prov.proveedor}`,
-        detalle: 'Sin fecha asignada', monto: prov.anticipo_monto ?? 0,
-        fecha: null, mes: 'sin_fecha', oeId: prov.orden_ejecucion_id,
+        detalle: 'Estimado mes actual', monto: prov.anticipo_monto ?? 0,
+        fecha: null, mes: mesHoy, oeId: prov.orden_ejecucion_id,
+        esGastoFijo: false,
       })
     }
 
+    // Saldo pendiente → mes del saldo del cliente (lógica: primero cobra el cliente, luego paga prov)
     if (anticipoPagado && !todosBodega) {
       const saldo = Math.max(0, Math.round((prov.monto_orden ?? 0) * 1.19) - (prov.anticipo_monto ?? 0))
       if (saldo > 0) {
+        const saldoFechaOE = oe?.saldo_fecha
+        const mesPago = saldoFechaOE && horizonteKeys.has(toMes(saldoFechaOE))
+          ? toMes(saldoFechaOE)
+          : mesHoy
         movimientos.push({
           tipo: 'salida', concepto: `Saldo prov. — ${prov.proveedor}`,
-          detalle: 'Sin fecha asignada', monto: saldo,
-          fecha: null, mes: 'sin_fecha', oeId: prov.orden_ejecucion_id,
+          detalle: saldoFechaOE ? 'Al cobrar saldo del cliente' : 'Estimado mes actual',
+          monto: saldo, fecha: null, mes: mesPago, oeId: prov.orden_ejecucion_id,
+          esGastoFijo: false,
         })
       }
     }
@@ -430,16 +441,44 @@ export default async function FlujoCajaPage({
     }
   }
 
+  /* Pagos a proveedor por mes estimado (para proyección) */
+  const pagosProvPorMes = new Map<string, number>()
+  for (const prov of proveedores ?? []) {
+    if (!oeIdsSet.has(prov.orden_ejecucion_id)) continue
+    const provItems = (oeItems ?? []).filter(
+      i => i.orden_ejecucion_id === prov.orden_ejecucion_id && i.proveedor === prov.proveedor
+    )
+    const anticipoPagado = provItems.length > 0 && provItems.every(i => i.anticipo_proveedor_pagado)
+    const todosBodega    = provItems.length > 0 && provItems.every(i => i.estado === 'en_bodega')
+    const oe             = oeMap.get(prov.orden_ejecucion_id)
+
+    if (!anticipoPagado && (prov.anticipo_monto ?? 0) > 0) {
+      pagosProvPorMes.set(mesHoy, (pagosProvPorMes.get(mesHoy) ?? 0) + (prov.anticipo_monto ?? 0))
+    }
+    if (anticipoPagado && !todosBodega) {
+      const saldo = Math.max(0, Math.round((prov.monto_orden ?? 0) * 1.19) - (prov.anticipo_monto ?? 0))
+      if (saldo > 0) {
+        const saldoFechaOE = oe?.saldo_fecha
+        const mesPago = saldoFechaOE && horizonteKeys.has(toMes(saldoFechaOE))
+          ? toMes(saldoFechaOE)
+          : mesHoy
+        pagosProvPorMes.set(mesPago, (pagosProvPorMes.get(mesPago) ?? 0) + saldo)
+      }
+    }
+  }
+
   // La proyección usa el valor guardado manualmente;
   // si aún no se ha editado (= 0), usa el cálculo automático como punto de partida
   const saldoBaseProyeccion = saldoCajaActual !== 0 ? saldoCajaActual : saldoCalculado
   let saldoRol = saldoBaseProyeccion
   const proyeccion = horizonte.map(m => {
     const cobros    = cobrosPorMes.get(m.key) ?? 0
+    const pagosProv = pagosProvPorMes.get(m.key) ?? 0
+    const gastos    = totalGastosFijos
     const saldoInicio = saldoRol
-    const saldoFin  = saldoInicio + cobros - totalGastosFijos
+    const saldoFin  = saldoInicio + cobros - pagosProv - gastos
     saldoRol = saldoFin
-    return { ...m, cobros, gastos: totalGastosFijos, saldoInicio, saldoFin, neto: cobros - totalGastosFijos }
+    return { ...m, cobros, pagosProv, gastos, saldoInicio, saldoFin, neto: cobros - pagosProv - gastos }
   })
 
   /* KPIs globales */
@@ -448,10 +487,8 @@ export default async function FlujoCajaPage({
   const vencidos          = movimientos.filter(m => m.mes === 'vencido')
   const totVencido        = vencidos.filter(m => m.tipo === 'entrada').reduce((s, m) => s + m.monto, 0)
 
-  /* Obligaciones pendientes a proveedores */
-  const totObligacionesProv = movimientos
-    .filter(m => m.tipo === 'salida' && m.mes === 'sin_fecha')
-    .reduce((s, m) => s + m.monto, 0)
+  /* Obligaciones pendientes a proveedores (ya distribuidas en meses) */
+  const totObligacionesProv = [...pagosProvPorMes.values()].reduce((s, v) => s + v, 0)
 
   return (
     <div>
@@ -571,10 +608,18 @@ export default async function FlujoCajaPage({
                         <span className="font-semibold">+${fmt(m.cobros)}</span>
                       </div>
                     )}
-                    <div className="flex justify-between text-amber-600">
-                      <span>↓ G.Fijos</span>
-                      <span className="font-semibold">−${fmt(m.gastos)}</span>
-                    </div>
+                    {m.pagosProv > 0 && (
+                      <div className="flex justify-between text-red-500">
+                        <span>↓ Prov.</span>
+                        <span className="font-semibold">−${fmt(m.pagosProv)}</span>
+                      </div>
+                    )}
+                    {m.gastos > 0 && (
+                      <div className="flex justify-between text-amber-600">
+                        <span>↓ G.Fijos</span>
+                        <span className="font-semibold">−${fmt(m.gastos)}</span>
+                      </div>
+                    )}
                     <div className="border-t border-gray-200 pt-1.5 mt-1.5" />
                     <div className="flex justify-between font-bold">
                       <span className="text-gray-600">Saldo</span>
@@ -628,16 +673,24 @@ export default async function FlujoCajaPage({
               : mesLabel(g.mes)
 
             return (
-              <div key={g.mes} className="rounded-xl border overflow-hidden">
-                {/* Header mes */}
-                <div className={`px-5 py-3.5 border-b border-inherit flex flex-wrap items-center justify-between gap-3 ${headerCls}`}>
-                  <div>
-                    <h3 className="font-bold text-gray-900 text-sm">{titulo}</h3>
-                    <p className="text-xs text-gray-400 mt-0.5">
-                      {g.entradas.length} cobro{g.entradas.length !== 1 ? 's' : ''} ·{' '}
-                      {g.salidas.length} pago{g.salidas.length !== 1 ? 's' : ''} prov.
-                      {g.gastosFijosMovs.length > 0 && ` · ${g.gastosFijosMovs.length} gasto${g.gastosFijosMovs.length !== 1 ? 's' : ''} fijo${g.gastosFijosMovs.length !== 1 ? 's' : ''}`}
-                    </p>
+              <details
+                key={g.mes}
+                className="rounded-xl border overflow-hidden group"
+                open={esHoy || isVencido}
+              >
+                {/* Header mes — summary colapsable */}
+                <summary className={`px-5 py-3.5 border-b border-inherit flex flex-wrap items-center justify-between gap-3 cursor-pointer list-none select-none ${headerCls}`}>
+                  <div className="flex items-center gap-2 min-w-0">
+                    {/* Indicador expand/collapse */}
+                    <span className="text-gray-400 text-xs font-bold transition-transform group-open:rotate-90 shrink-0">▶</span>
+                    <div className="min-w-0">
+                      <h3 className="font-bold text-gray-900 text-sm">{titulo}</h3>
+                      <p className="text-xs text-gray-400 mt-0.5">
+                        {g.entradas.length} cobro{g.entradas.length !== 1 ? 's' : ''} ·{' '}
+                        {g.salidas.length} pago{g.salidas.length !== 1 ? 's' : ''} prov.
+                        {g.gastosFijosMovs.length > 0 && ` · ${g.gastosFijosMovs.length} gasto${g.gastosFijosMovs.length !== 1 ? 's' : ''} fijo${g.gastosFijosMovs.length !== 1 ? 's' : ''}`}
+                      </p>
+                    </div>
                   </div>
                   <div className="flex items-center gap-4 text-sm flex-wrap">
                     <div className="text-right">
@@ -663,7 +716,7 @@ export default async function FlujoCajaPage({
                       </div>
                     )}
                   </div>
-                </div>
+                </summary>
 
                 {/* Movimientos */}
                 <div className="bg-white divide-y divide-gray-50">
@@ -735,15 +788,15 @@ export default async function FlujoCajaPage({
                     </div>
                   )}
                 </div>
-              </div>
+              </details>
             )
           })}
         </div>
       )}
 
       <p className="mt-6 text-xs text-gray-400 text-center">
-        El saldo proyectado por mes parte de tu caja actual y descuenta gastos fijos mensualmente. <br />
-        Los pagos a proveedores sin fecha aparecen en &quot;Sin fecha asignada&quot; y no afectan el balance proyectado.
+        El saldo proyectado por mes parte de tu caja actual y descuenta pagos a proveedores y gastos fijos. <br />
+        Haz clic en cada mes para ver el detalle de movimientos.
       </p>
     </div>
   )
