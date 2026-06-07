@@ -88,20 +88,20 @@ export default async function PagarPage({
     const todosBodega    = oeItems.length > 0 && oeItems.every(i => i.estado === 'en_bodega')
     const oe             = oeMap.get(p.orden_ejecucion_id)
 
-    // ── Bases (sin IVA) ──
-    const montoBase    = p.monto_orden    ?? 0
-    const anticipoBase = p.anticipo_monto ?? 0
-    const saldoBase    = Math.max(0, montoBase - anticipoBase)
+    // monto_orden = base sin IVA  →  × 1.19 para obtener total c/IVA
+    const montoBase   = p.monto_orden ?? 0
+    const ivaOrden    = Math.round(montoBase * 0.19)
+    const totalConIva = montoBase + ivaOrden           // monto_orden × 1.19
 
-    // ── IVA (19 %) ──
-    const ivaOrden    = Math.round(montoBase    * 0.19)
-    const ivaAnticipo = Math.round(anticipoBase * 0.19)
-    const ivaSaldo    = Math.round(saldoBase    * 0.19)
+    // anticipo_monto YA incluye IVA (se ingresa como el monto real a girar al proveedor)
+    const anticipoConIva = p.anticipo_monto ?? 0
+    const anticipoBase   = Math.round(anticipoConIva / 1.19)
+    const ivaAnticipo    = anticipoConIva - anticipoBase
 
-    // ── Totales con IVA ──
-    const totalConIva    = montoBase    + ivaOrden
-    const anticipoConIva = anticipoBase + ivaAnticipo
-    const saldoConIva    = saldoBase    + ivaSaldo
+    // Saldo c/IVA = total c/IVA − anticipo ya girado (c/IVA)
+    const saldoConIva = Math.max(0, totalConIva - anticipoConIva)
+    const saldoBase   = Math.round(saldoConIva / 1.19)
+    const ivaSaldo    = saldoConIva - saldoBase
 
     const estado = calcEstadoPago(montoBase, anticipoBase, anticipoPagado, todosBodega)
 
@@ -309,7 +309,7 @@ export default async function PagarPage({
                             proveedor={r.proveedor}
                             anticipoPagado={r.anticipoPagado}
                             anticipoMonto={r.anticipo_monto ?? 0}
-                            saldoMonto={r.saldoBase}
+                            saldoMonto={r.saldoConIva}
                           />
                         )}
                       </td>
@@ -395,7 +395,7 @@ export default async function PagarPage({
                               proveedor={r.proveedor}
                               anticipoPagado={r.anticipoPagado}
                               anticipoMonto={r.anticipo_monto ?? 0}
-                              saldoMonto={r.saldoBase}
+                              saldoMonto={r.saldoConIva}
                             />
                           )}
                         </td>
