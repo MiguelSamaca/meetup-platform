@@ -10,23 +10,6 @@ function fmt(n: number) {
   return n.toLocaleString('es-CO', { minimumFractionDigits: 0, maximumFractionDigits: 0 })
 }
 
-/** Desglose base + IVA en dos líneas */
-function MontoConIVA({
-  total, base, iva,
-  colorTotal = 'text-gray-900',
-}: {
-  total: number; base: number; iva: number; colorTotal?: string
-}) {
-  if (total === 0) return <span className="text-gray-300">—</span>
-  return (
-    <div className="text-right">
-      <p className={`font-semibold ${colorTotal}`}>${fmt(total)}</p>
-      <p className="text-[10px] text-gray-400 whitespace-nowrap">
-        Base&nbsp;${fmt(base)}&nbsp;+&nbsp;IVA&nbsp;${fmt(iva)}
-      </p>
-    </div>
-  )
-}
 
 type EstadoPago = 'sin_anticipo' | 'anticipo_pendiente' | 'anticipo_girado' | 'saldo_pendiente' | 'liquidado'
 
@@ -313,14 +296,10 @@ export default async function PagarPage({
                         </Link>
                       </td>
                       <td className="px-5 py-3 text-gray-700">{r.contactoNombre}</td>
-                      <td className="px-5 py-3">
-                        <MontoConIVA total={r.totalConIva}    base={r.montoBase}    iva={r.ivaOrden} />
-                      </td>
-                      <td className="px-5 py-3">
-                        <MontoConIVA total={r.anticipoConIva} base={r.anticipoBase} iva={r.ivaAnticipo} colorTotal="text-blue-700" />
-                      </td>
-                      <td className="px-5 py-3">
-                        <MontoConIVA total={r.saldoConIva}    base={r.saldoBase}    iva={r.ivaSaldo}    colorTotal="text-amber-600" />
+                      <td className="px-5 py-3 text-right font-semibold text-gray-900">${fmt(r.totalConIva)}</td>
+                      <td className="px-5 py-3 text-right font-semibold text-blue-700">${fmt(r.anticipoConIva)}</td>
+                      <td className="px-5 py-3 text-right font-semibold text-amber-600">
+                        {r.saldoConIva > 0 ? `$${fmt(r.saldoConIva)}` : <span className="text-gray-300">—</span>}
                       </td>
                       <td className="px-5 py-3 text-center"><EstadoBadge estado={r.estado} /></td>
                       <td className="px-4 py-3">
@@ -403,14 +382,10 @@ export default async function PagarPage({
                     {provRows.map(r => (
                       <tr key={r.proveedor} className="hover:bg-gray-50">
                         <td className="px-5 py-3 font-semibold text-gray-800">{r.proveedor}</td>
-                        <td className="px-5 py-3">
-                          <MontoConIVA total={r.totalConIva}    base={r.montoBase}    iva={r.ivaOrden} />
-                        </td>
-                        <td className="px-5 py-3">
-                          <MontoConIVA total={r.anticipoConIva} base={r.anticipoBase} iva={r.ivaAnticipo} colorTotal="text-blue-700" />
-                        </td>
-                        <td className="px-5 py-3">
-                          <MontoConIVA total={r.saldoConIva}    base={r.saldoBase}    iva={r.ivaSaldo}    colorTotal="text-amber-600" />
+                        <td className="px-5 py-3 text-right font-semibold text-gray-900">${fmt(r.totalConIva)}</td>
+                        <td className="px-5 py-3 text-right font-semibold text-blue-700">${fmt(r.anticipoConIva)}</td>
+                        <td className="px-5 py-3 text-right font-semibold text-amber-600">
+                          {r.saldoConIva > 0 ? `$${fmt(r.saldoConIva)}` : <span className="text-gray-300">—</span>}
                         </td>
                         <td className="px-5 py-3 text-center"><EstadoBadge estado={r.estado} /></td>
                         <td className="px-4 py-3">
