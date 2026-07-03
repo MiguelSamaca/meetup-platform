@@ -41,6 +41,14 @@ const sections = [
       { href: '/admin/finanzas/gastos-fijos',   label: 'Gastos fijos', icon: '◇', modulo: 'finanzas' },
     ],
   },
+  {
+    label: 'SALAS',
+    items: [
+      { href: '/admin/rooms',               label: 'Estado de salas', icon: '⬡', modulo: 'rooms' },
+      { href: '/admin/rooms/alertas',       label: 'Alertas',         icon: '◉', modulo: 'rooms' },
+      { href: '/admin/rooms/configuracion', label: 'Configuración',   icon: '◇', modulo: 'rooms' },
+    ],
+  },
 ]
 
 const configNav = { href: '/admin/configuracion', label: 'Configuración', icon: '⚙' }
