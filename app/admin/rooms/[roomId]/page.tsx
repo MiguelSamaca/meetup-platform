@@ -25,8 +25,9 @@ type uuid = string
 export default async function RoomDetailPage({
   params,
 }: {
-  params: { roomId: string }
+  params: Promise<{ roomId: string }>
 }) {
+  const { roomId } = await params
   const profile = await getCurrentProfile()
   if (!profile || !profile.tenant_id) redirect('/login')
   if (profile.rol !== 'admin' && profile.rol !== 'superadmin') redirect('/admin')
@@ -36,7 +37,7 @@ export default async function RoomDetailPage({
   const { data: room } = await admin
     .from('logitech_rooms')
     .select('id, name, type, location, capacity, updated_at, logitech_place_id')
-    .eq('id', params.roomId)
+    .eq('id', roomId)
     .eq('tenant_id', profile.tenant_id)
     .maybeSingle()
 
@@ -86,7 +87,7 @@ export default async function RoomDetailPage({
   const onlineCount = (devices ?? []).filter(d => d.is_online).length
 
   return (
-    <div className="p-6 space-y-6 max-w-4xl">
+    <div className="space-y-6 max-w-4xl">
       {/* Header */}
       <div className="flex items-start justify-between">
         <div>

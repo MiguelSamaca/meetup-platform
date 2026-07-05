@@ -4,6 +4,7 @@ import { useState, useTransition } from 'react'
 import Link from 'next/link'
 import { crearCotizacion, editarCotizacion, type ItemInput } from '@/app/actions/cotizaciones'
 import FotoUploader from '@/components/admin/FotoUploader'
+import { fmt } from '@/lib/format'
 
 export interface ProductoCatalogo {
   id:          string
@@ -89,10 +90,6 @@ const VALIDEZ_OPCIONES = [
   { value: 60, label: '60 días' },
 ]
 
-function fmt(n: number) {
-  return n.toLocaleString('es-CO', { minimumFractionDigits: 0, maximumFractionDigits: 0 })
-}
-
 function calcRow(row: ItemRow) {
   const qty   = parseFloat(row.cantidad)        || 0
   const price = parseFloat(row.precio_unitario) || 0
@@ -107,7 +104,6 @@ function calcRow(row: ItemRow) {
   const margen      = precioTotal > 0 ? ((precioTotal - costoTotal) / precioTotal) * 100 : 0
   return { precioBase, descMonto, precioTotal, costoTotal, margen }
 }
-
 
 export default function CotizacionForm({
   contactoId,

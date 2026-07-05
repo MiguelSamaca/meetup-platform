@@ -33,6 +33,12 @@ const MODULOS_CATALOGO = [
       { key: 'finanzas', label: 'Módulo financiero', desc: 'Dashboard, cobrar, pagar, rentabilidad y flujo de caja' },
     ],
   },
+  {
+    grupo: 'Salas',
+    items: [
+      { key: 'rooms', label: 'Salas Logitech', desc: 'Monitoreo de salas de videoconferencia vía Sync Cloud API' },
+    ],
+  },
 ]
 
 interface Props {

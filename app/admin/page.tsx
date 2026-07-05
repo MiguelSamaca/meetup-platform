@@ -2,11 +2,7 @@ import { createAdminClient } from '@/lib/supabase/admin'
 import { getCurrentProfile } from '@/lib/auth'
 import StatsCard from '@/components/admin/StatsCard'
 import Link from 'next/link'
-
-/* ─── helpers ──────────────────────────────────────────── */
-function fmt(n: number) {
-  return new Intl.NumberFormat('es-CO', { style: 'currency', currency: 'COP', maximumFractionDigits: 0 }).format(n)
-}
+import { fmtCOP as fmt } from '@/lib/format'
 
 type EstadoCot = 'borrador' | 'enviada' | 'aprobada' | 'rechazada'
 

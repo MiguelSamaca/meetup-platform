@@ -2,10 +2,7 @@
 
 import { useState, useTransition } from 'react'
 import { actualizarSaldoCaja }     from '@/app/actions/gastos-fijos'
-
-function fmt(n: number) {
-  return n.toLocaleString('es-CO', { minimumFractionDigits: 0, maximumFractionDigits: 0 })
-}
+import { fmt } from '@/lib/format'
 
 interface DetalleCaja {
   entradas:      number   // anticipos + saldos recibidos de clientes

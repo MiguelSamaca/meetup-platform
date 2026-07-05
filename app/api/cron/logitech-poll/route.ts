@@ -7,7 +7,8 @@ const LOGITECH_SYNC_BASE = 'https://api.sync.logitech.com'
 function isAuthorized(req: NextRequest): boolean {
   const auth   = req.headers.get('authorization') ?? ''
   const secret = process.env.CRON_SECRET
-  if (!secret) return true   // dev: no secret configurado
+  // Sin secret configurado: permitir solo en desarrollo, nunca en producción
+  if (!secret) return process.env.NODE_ENV !== 'production'
   return auth === `Bearer ${secret}`
 }
 

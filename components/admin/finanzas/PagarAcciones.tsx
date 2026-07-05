@@ -2,6 +2,7 @@
 
 import { useState, useTransition } from 'react'
 import { actualizarAnticipoProv } from '@/app/actions/ordenes'
+import { fmt } from '@/lib/format'
 
 interface Props {
   oeId:             string
@@ -9,10 +10,6 @@ interface Props {
   anticipoPagado:   boolean
   anticipoMonto:    number
   saldoMonto:       number
-}
-
-function fmt(n: number) {
-  return n.toLocaleString('es-CO', { minimumFractionDigits: 0, maximumFractionDigits: 0 })
 }
 
 export default function PagarAcciones({

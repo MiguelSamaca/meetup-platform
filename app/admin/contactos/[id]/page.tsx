@@ -4,16 +4,13 @@ import { eliminarCotizacion } from '@/app/actions/cotizaciones'
 import { notFound } from 'next/navigation'
 import Link from 'next/link'
 import DeleteButton from '@/components/admin/DeleteButton'
+import { fmt } from '@/lib/format'
 
 const estadoColor: Record<string, string> = {
   borrador:   'bg-gray-100 text-gray-600',
   enviada:    'bg-blue-100 text-blue-700',
   aprobada:   'bg-emerald-100 text-emerald-700',
   rechazada:  'bg-red-100 text-red-600',
-}
-
-function fmt(n: number) {
-  return n.toLocaleString('es-CO', { minimumFractionDigits: 0, maximumFractionDigits: 0 })
 }
 
 export default async function ContactoDetailPage({

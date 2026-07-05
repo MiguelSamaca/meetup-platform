@@ -4,10 +4,7 @@ import { notFound } from 'next/navigation'
 import Link from 'next/link'
 import { duplicarCotizacion } from '@/app/actions/cotizaciones'
 import { crearOrdenEjecucion } from '@/app/actions/ordenes'
-
-function fmt(n: number) {
-  return n.toLocaleString('es-CO', { minimumFractionDigits: 0, maximumFractionDigits: 0 })
-}
+import { fmt } from '@/lib/format'
 
 const estadoColor: Record<string, string> = {
   borrador:  'bg-gray-100 text-gray-600',

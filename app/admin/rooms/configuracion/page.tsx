@@ -24,7 +24,7 @@ export default async function ConfiguracionRoomsPage() {
     : null
 
   return (
-    <div className="p-6 max-w-2xl space-y-6">
+    <div className="max-w-2xl space-y-6">
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
@@ -47,7 +47,10 @@ export default async function ConfiguracionRoomsPage() {
                 <p className="text-xs text-green-600 mt-0.5">Última sincronización: {sincStr}</p>
               )}
             </div>
-            <form action={forzarSincronizacion}>
+            <form action={async () => {
+              'use server'
+              await forzarSincronizacion()
+            }}>
               <button type="submit"
                 className="px-3 py-1.5 bg-green-700 text-white rounded-lg text-xs font-medium hover:bg-green-800 transition-colors">
                 Sincronizar ahora

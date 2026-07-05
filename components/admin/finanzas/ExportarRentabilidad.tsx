@@ -1,5 +1,7 @@
 'use client'
 
+import { fmt } from '@/lib/format'
+
 interface FilaExport {
   proyecto:   string
   estado:     string
@@ -8,10 +10,6 @@ interface FilaExport {
   gastos:     number
   margenBruto: number
   pctMargen:  number | null
-}
-
-function fmt(n: number) {
-  return n.toLocaleString('es-CO', { minimumFractionDigits: 0, maximumFractionDigits: 0 })
 }
 
 export default function ExportarRentabilidad({ filas }: { filas: FilaExport[] }) {

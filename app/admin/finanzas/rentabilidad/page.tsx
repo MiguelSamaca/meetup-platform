@@ -2,11 +2,9 @@ import { createAdminClient } from '@/lib/supabase/admin'
 import { getCurrentProfile }  from '@/lib/auth'
 import Link                   from 'next/link'
 import ExportarRentabilidad   from '@/components/admin/finanzas/ExportarRentabilidad'
+import { fmt } from '@/lib/format'
 
 /* ── Helpers ── */
-function fmt(n: number) {
-  return n.toLocaleString('es-CO', { minimumFractionDigits: 0, maximumFractionDigits: 0 })
-}
 
 /* ── Semáforo de margen (4.3) ── */
 function MargenBadge({ pct }: { pct: number | null }) {

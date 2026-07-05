@@ -2,6 +2,7 @@
 
 import { useState, useTransition } from 'react'
 import { actualizarAnticipo, actualizarSaldo } from '@/app/actions/ordenes'
+import { fmt } from '@/lib/format'
 
 interface Props {
   oeId:             string
@@ -17,10 +18,6 @@ export default function CobrarAcciones({
   const [antRec, setAntRec] = useState(anticipoRecibido)
   const [salRec, setSalRec] = useState(saldoRecibido)
   const [pending, start]    = useTransition()
-
-  function fmt(n: number) {
-    return n.toLocaleString('es-CO', { minimumFractionDigits: 0, maximumFractionDigits: 0 })
-  }
 
   function toggleAnticipo() {
     const next = !antRec

@@ -46,13 +46,18 @@ export default async function AlertasRoomsPage() {
     return new Date(str).toLocaleString('es-CO', { dateStyle: 'short', timeStyle: 'short' })
   }
 
+  // Supabase tipa las relaciones anidadas como arrays; en runtime son objetos (FK many-to-one)
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   function getRoom(a: any): string | null {
     return a.logitech_devices?.logitech_rooms?.name ?? null
   }
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  function getDeviceName(a: any): string | null {
+    return a.logitech_devices?.name ?? null
+  }
 
   return (
-    <div className="p-6 space-y-6">
+    <div className="space-y-6">
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
@@ -109,7 +114,7 @@ export default async function AlertasRoomsPage() {
                   {getRoom(a) && (
                     <p className="text-xs opacity-70 mt-0.5">
                       Sala: {getRoom(a)}
-                      {a.logitech_devices?.name && ` · ${a.logitech_devices.name}`}
+                      {getDeviceName(a) && ` · ${getDeviceName(a)}`}
                     </p>
                   )}
                 </div>

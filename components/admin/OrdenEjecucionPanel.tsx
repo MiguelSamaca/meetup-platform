@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useTransition, useMemo } from 'react'
+import { fmt } from '@/lib/format'
 import {
   actualizarAnticipo,
   actualizarSaldo,
@@ -55,9 +56,6 @@ interface Props {
 }
 
 /* ── Helpers ── */
-function fmt(n: number) {
-  return n.toLocaleString('es-CO', { minimumFractionDigits: 0, maximumFractionDigits: 0 })
-}
 
 function parseFmt(v: string): number {
   return parseFloat(v.replace(/[^\d]/g, '')) || 0

@@ -4,12 +4,9 @@ import { Suspense }              from 'react'
 import Link                      from 'next/link'
 import VistaPagarSelector        from '@/components/admin/finanzas/VistaPagarSelector'
 import PagarAcciones             from '@/components/admin/finanzas/PagarAcciones'
+import { fmt } from '@/lib/format'
 
 /* ── Helpers ── */
-function fmt(n: number) {
-  return n.toLocaleString('es-CO', { minimumFractionDigits: 0, maximumFractionDigits: 0 })
-}
-
 
 type EstadoPago = 'sin_anticipo' | 'anticipo_pendiente' | 'anticipo_girado' | 'saldo_pendiente' | 'liquidado'
 

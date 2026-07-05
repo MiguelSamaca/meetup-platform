@@ -4,11 +4,9 @@ import { Suspense } from 'react'
 import Link from 'next/link'
 import FiltrosCobrar from '@/components/admin/finanzas/FiltrosCobrar'
 import CobrarAcciones from '@/components/admin/finanzas/CobrarAcciones'
+import { fmt } from '@/lib/format'
 
 /* ── Helpers ── */
-function fmt(n: number) {
-  return n.toLocaleString('es-CO', { minimumFractionDigits: 0, maximumFractionDigits: 0 })
-}
 
 type EstadoCobro = 'pendiente' | 'anticipo' | 'saldo_pendiente' | 'pagado' | 'vencido'
 

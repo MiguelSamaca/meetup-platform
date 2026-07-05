@@ -3,10 +3,7 @@ import { getCurrentProfile } from '@/lib/auth'
 import { notFound } from 'next/navigation'
 import PrintButton from '@/components/admin/PrintButton'
 import type { Metadata } from 'next'
-
-function fmt(n: number) {
-  return n.toLocaleString('es-CO', { minimumFractionDigits: 0, maximumFractionDigits: 0 })
-}
+import { fmt } from '@/lib/format'
 
 /* ── Título dinámico para PDF: "Edgardo Gutierrez · 2026-05-21 · COT-202605-001" ── */
 export async function generateMetadata({

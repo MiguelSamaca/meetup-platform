@@ -2,6 +2,7 @@
 
 import { useState, useTransition, useRef } from 'react'
 import { agregarGasto, eliminarGasto } from '@/app/actions/gastos'
+import { fmt } from '@/lib/format'
 
 interface Gasto {
   id:          string
@@ -36,10 +37,6 @@ const CAT_COLOR: Record<string, string> = {
   materiales:   'bg-amber-100 text-amber-700',
   herramientas: 'bg-yellow-100 text-yellow-700',
   otros:        'bg-gray-100 text-gray-600',
-}
-
-function fmt(n: number) {
-  return n.toLocaleString('es-CO', { minimumFractionDigits: 0, maximumFractionDigits: 0 })
 }
 
 const hoy = new Date().toISOString().split('T')[0]

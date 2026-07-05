@@ -4,10 +4,7 @@ import { notFound } from 'next/navigation'
 import Link from 'next/link'
 import OrdenEjecucionPanel from '@/components/admin/OrdenEjecucionPanel'
 import { crearProyectoDesdeOE } from '@/app/actions/proyectos'
-
-function fmt(n: number) {
-  return n.toLocaleString('es-CO', { minimumFractionDigits: 0, maximumFractionDigits: 0 })
-}
+import { fmt } from '@/lib/format'
 
 export default async function OrdenEjecucionPage({
   params,

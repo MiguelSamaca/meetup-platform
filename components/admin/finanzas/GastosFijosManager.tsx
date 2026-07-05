@@ -2,6 +2,7 @@
 
 import { useState, useTransition } from 'react'
 import { crearGastoFijo, toggleGastoFijo, eliminarGastoFijo } from '@/app/actions/gastos-fijos'
+import { fmt } from '@/lib/format'
 
 type GastoFijo = {
   id:        string
@@ -23,10 +24,6 @@ const CAT_COLORS: Record<string, string> = {
   operativo: 'bg-blue-100 text-blue-700',
   admin:     'bg-gray-100 text-gray-700',
   marketing: 'bg-amber-100 text-amber-700',
-}
-
-function fmt(n: number) {
-  return n.toLocaleString('es-CO', { minimumFractionDigits: 0, maximumFractionDigits: 0 })
 }
 
 export default function GastosFijosManager({ gastos }: { gastos: GastoFijo[] }) {

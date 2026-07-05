@@ -3,11 +3,9 @@ import { getCurrentProfile }                   from '@/lib/auth'
 import Link                                    from 'next/link'
 import SaldoCajaEditor                         from '@/components/admin/finanzas/SaldoCajaEditor'
 import { getPeriodoIVA, type IVAPeriodicidad } from '@/lib/iva-colombia'
+import { fmt } from '@/lib/format'
 
 /* ── Helpers ── */
-function fmt(n: number) {
-  return n.toLocaleString('es-CO', { minimumFractionDigits: 0, maximumFractionDigits: 0 })
-}
 function mesLabel(yyyymm: string): string {
   const [y, m] = yyyymm.split('-')
   return new Date(Number(y), Number(m) - 1, 1)

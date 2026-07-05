@@ -1,10 +1,7 @@
 import { createAdminClient } from '@/lib/supabase/admin'
 import { getCurrentProfile } from '@/lib/auth'
 import Link from 'next/link'
-
-function fmt(n: number) {
-  return n.toLocaleString('es-CO', { minimumFractionDigits: 0, maximumFractionDigits: 0 })
-}
+import { fmt } from '@/lib/format'
 
 function ProgressBar({ recibidos, pedidos, total }: { recibidos: number; pedidos: number; total: number }) {
   if (total === 0) return <span className="text-xs text-gray-400">Sin ítems</span>

@@ -5,11 +5,9 @@ import PeriodoSelector            from '@/components/admin/finanzas/PeriodoSelec
 import SaldoCajaEditor            from '@/components/admin/finanzas/SaldoCajaEditor'
 import Link                       from 'next/link'
 import { getPeriodoActual }       from '@/lib/iva-colombia'
+import { fmt } from '@/lib/format'
 
 /* ── Helpers ── */
-function fmt(n: number) {
-  return n.toLocaleString('es-CO', { minimumFractionDigits: 0, maximumFractionDigits: 0 })
-}
 
 function getRangoFechas(periodo: string): { desde: string; hasta: string } {
   const hoy  = new Date()
