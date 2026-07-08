@@ -82,29 +82,28 @@ async function syncTenant(
   })
   const tlsOptions = { dispatcher }
 
-  // 1. Obtener salas (places)
+  // Una sola llamada: /org/{orgId}/place devuelve salas con dispositivos embebidos.
   const placesRes = await request(
-    `${LOGITECH_SYNC_BASE}/v1/orgs/${cfg.logitech_org_id}/places`,
+    `${LOGITECH_SYNC_BASE}/v1/org/${cfg.logitech_org_id}/place`,
     { method: 'GET', ...tlsOptions }
   )
-  const placesBody = await placesRes.body.json() as { data?: LogitechPlace[] }
-  const places: LogitechPlace[] = placesBody.data ?? []
+  const placesBody = await placesRes.body.json() as { places?: LogitechPlace[] }
+  const places: LogitechPlace[] = placesBody.places ?? []
 
   for (const place of places) {
     await admin.from('logitech_rooms').upsert(
       {
         tenant_id:        cfg.tenant_id,
         logitech_place_id: place.id,
-        name:             place.name,
+        name:             place.name ?? null,
         type:             place.type ?? 'Room',
-        location:         place.location ?? null,
-        capacity:         place.capacity ?? null,
+        location:         place.location ?? place.group ?? null,
+        capacity:         place.seatCount ?? null,
         updated_at:       new Date().toISOString(),
       },
       { onConflict: 'tenant_id,logitech_place_id' }
     )
 
-    // Obtener room_id local
     const { data: room } = await admin
       .from('logitech_rooms')
       .select('id')
@@ -114,37 +113,33 @@ async function syncTenant(
 
     if (!room) continue
 
-    // 2. Obtener dispositivos de la sala
-    const devRes = await request(
-      `${LOGITECH_SYNC_BASE}/v1/orgs/${cfg.logitech_org_id}/places/${place.id}/devices`,
-      { method: 'GET', ...tlsOptions }
-    )
-    const devBody = await devRes.body.json() as { data?: LogitechDevice[] }
-    const devices: LogitechDevice[] = devBody.data ?? []
+    for (const dev of place.devices ?? []) {
+      const isOnline = dev.status === 'Online' || dev.status === 'InUse'
+      const warrantyExpISO = dev.warranty?.expiresAt
+        ? new Date(dev.warranty.expiresAt).toISOString().slice(0, 10)
+        : null
 
-    for (const dev of devices) {
       await admin.from('logitech_devices').upsert(
         {
           room_id:           room.id,
           tenant_id:         cfg.tenant_id,
           logitech_device_id: dev.id,
-          name:              dev.name,
-          model_name:        dev.modelName ?? null,
-          serial_number:     dev.serialNumber ?? null,
-          firmware_version:  dev.firmwareVersion ?? null,
-          is_online:         dev.isOnline ?? false,
-          warranty_status:   dev.warrantyStatus ?? 'Unknown',
-          warranty_expires:  dev.warrantyExpirationDate ?? null,
-          ip_address:        dev.ipAddress ?? null,
-          mac_address:       dev.macAddress ?? null,
-          temperature:       dev.temperature ?? null,
-          humidity:          dev.humidity ?? null,
+          name:              dev.name ?? null,
+          model_name:        dev.name ?? null,
+          serial_number:     dev.serial ?? null,
+          firmware_version:  dev.version ?? null,
+          is_online:         isOnline,
+          warranty_status:   dev.warranty?.type ?? null,
+          warranty_expires:  warrantyExpISO,
+          ip_address:        dev.network?.ip ?? null,
+          mac_address:       dev.network?.mac ?? null,
+          temperature:       dev.sensors?.temperature ?? null,
+          humidity:          dev.sensors?.humidity ?? null,
           updated_at:        new Date().toISOString(),
         },
         { onConflict: 'tenant_id,logitech_device_id' }
       )
 
-      // Obtener device_id local y guardar snapshot
       const { data: device } = await admin
         .from('logitech_devices')
         .select('id')
@@ -155,23 +150,25 @@ async function syncTenant(
       if (device) {
         await admin.from('logitech_device_snapshots').insert({
           device_id:    device.id,
-          is_online:    dev.isOnline ?? false,
-          device_state: dev.deviceState ?? null,
-          temperature:  dev.temperature ?? null,
-          humidity:     dev.humidity ?? null,
+          is_online:    isOnline,
+          device_state: dev.status ?? null,
+          temperature:  dev.sensors?.temperature ?? null,
+          humidity:     dev.sensors?.humidity ?? null,
           captured_at:  new Date().toISOString(),
         })
 
-        // Generar alerta si dispositivo offline
-        if (dev.isOnline === false) {
+        // Alerta: dispositivo offline o en estado de error
+        if (dev.status === 'Offline') {
           await upsertAlerta(admin, cfg.tenant_id, device.id, 'offline', 'high',
             `${dev.name ?? 'Dispositivo'} está offline`)
+        } else if (dev.healthStatus === 'Error') {
+          await upsertAlerta(admin, cfg.tenant_id, device.id, 'health', 'high',
+            `${dev.name ?? 'Dispositivo'} reporta un error de salud`)
         }
 
-        // Alerta garantía por vencer (< 60 días)
-        if (dev.warrantyExpirationDate) {
-          const exp = new Date(dev.warrantyExpirationDate)
-          const diasRestantes = Math.floor((exp.getTime() - Date.now()) / 86400000)
+        // Alerta: garantía por vencer (< 60 días) o vencida
+        if (dev.warranty?.expiresAt) {
+          const diasRestantes = Math.floor((dev.warranty.expiresAt - Date.now()) / 86400000)
           if (diasRestantes < 0) {
             await upsertAlerta(admin, cfg.tenant_id, device.id, 'warranty_expired', 'high',
               `Garantía de ${dev.name ?? 'dispositivo'} vencida`)
@@ -213,27 +210,28 @@ async function upsertAlerta(
   }
 }
 
-// ─── Types mínimos de la Logitech Sync Cloud API ─────────────────────────────
+// ─── Types de la Logitech Sync Cloud API (v0.1.4) ────────────────────────────
 interface LogitechPlace {
-  id:       string
-  name:     string
-  type?:    string
-  location?: string
-  capacity?: number
+  id:         string
+  name?:      string
+  type?:      string   // Room | Desk
+  group?:     string
+  location?:  string
+  seatCount?: number
+  occupancy?: number
+  devices?:   LogitechDevice[]
 }
 
 interface LogitechDevice {
-  id:                     string
-  name:                   string
-  modelName?:             string
-  serialNumber?:          string
-  firmwareVersion?:       string
-  isOnline?:              boolean
-  warrantyStatus?:        string
-  warrantyExpirationDate?: string
-  ipAddress?:             string
-  macAddress?:            string
-  temperature?:           number
-  humidity?:              number
-  deviceState?:           string
+  id:           string
+  type?:        string   // Logitech | Computer | Generic
+  name?:        string
+  version?:     string   // CollabOS/firmware
+  serial?:      string
+  status?:      string   // Offline | Online | InUse
+  healthStatus?: string  // NoIssues | Warning | Error
+  network?:     { ip?: string; mac?: string; hostName?: string }
+  sensors?:     { temperature?: number; humidity?: number; co2?: number }
+  warranty?:    { type?: string; expiresAt?: number }
+  lastSeen?:    number
 }

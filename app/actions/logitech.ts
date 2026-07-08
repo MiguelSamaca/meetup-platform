@@ -131,7 +131,7 @@ export async function probarConexionSyncDemo(): Promise<DemoResultado> {
   }
 
   const apiServer = process.env.LOGI_API_SERVER || 'https://api.sync.logitech.com/v1'
-  const url = `${apiServer}/orgs/${cfg.logitech_org_id}/places`
+  const url = `${apiServer}/org/${cfg.logitech_org_id}/place`
   const req = { method: 'GET', url, auth: 'mTLS (certificado de cliente)' }
 
   const { Agent, request } = await import('undici')

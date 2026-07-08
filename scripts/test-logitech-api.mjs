@@ -25,7 +25,7 @@ const API_SERVER = process.env.LOGI_API_SERVER || 'https://api.sync.logitech.com
 const ORG_ID     = process.env.LOGI_ORG_ID     || 'PEGA_AQUI_TU_ORG_ID'
 const CERT_PATH  = process.env.LOGI_CERT_PATH  || './certificate.pem'
 const KEY_PATH   = process.env.LOGI_KEY_PATH   || './privateKey.pem'
-const ENDPOINT   = process.env.LOGI_ENDPOINT   || `/orgs/${ORG_ID}/places`
+const ENDPOINT   = process.env.LOGI_ENDPOINT   || `/org/${ORG_ID}/place`
 
 const line = (c = '─') => console.log(c.repeat(60))
 

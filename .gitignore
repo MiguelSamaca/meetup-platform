@@ -45,3 +45,7 @@ next-env.d.ts
 
 # Documentos HTML generados (derivados de los .md)
 docs/*.html
+
+# Certificados / llaves - NUNCA versionar
+*.pem
+*.key
