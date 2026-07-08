@@ -18,7 +18,7 @@
  */
 
 import { readFileSync } from 'node:fs'
-import { request } from 'undici'
+import { Agent, request } from 'undici'
 
 // ─── Configuración ───────────────────────────────────────────────
 const API_SERVER = process.env.LOGI_API_SERVER || 'https://api.sync.logitech.com/v1'
@@ -58,9 +58,11 @@ async function main() {
   // 2) Llamada mTLS
   const t0 = Date.now()
   try {
+    // El certificado mTLS se envía vía Agent (dispatcher), no como opción de request()
+    const dispatcher = new Agent({ connect: { cert, key } })
     const res = await request(url, {
       method: 'GET',
-      connect: { cert, key },          // ← autenticación mTLS
+      dispatcher,
       headers: { accept: 'application/json' },
     })
     const ms   = Date.now() - t0

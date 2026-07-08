@@ -1,17 +1,17 @@
 # CollabOS — Etapa 1: Flujo de trabajo y plan de desarrollo
 
 > Integración local con dispositivos Logitech vía **Local Network Access (LNA)**.
-> Proveedor: MeetUp Colombia / AV CORE · Julio 2026 · v1.0
-> Complementa la integración nube-a-nube (Sync Cloud API) ya existente.
+> Proveedor: MeetUp Colombia · Julio 2026 · v1.0
+> Se construye junto con la integración nube-a-nube (Sync Cloud API) como parte del mismo dashboard.
 
 ---
 
 ## 1. Qué es y por qué
 
-La **Sync Cloud API** (ya construida) da inventario y estado general desde la nube de Logitech.
-La **API local de CollabOS (LNA)** da datos **en tiempo real, directo del dispositivo** en la red del cliente: estado detallado, salud, red, y —en etapas posteriores— control local.
+La **Sync Cloud API** entrega inventario y estado general desde la nube de Logitech.
+La **API local de CollabOS (LNA)** entrega datos **en tiempo real, directo del dispositivo** en la red del cliente: estado detallado, salud, red, y —en etapas posteriores— control local.
 
-Como la LNA exige que **quien consulta esté en la misma subred que el dispositivo**, se requiere un **agente local**: un pequeño programa que corre en un equipo dentro de la red del cliente, lee el estado de cada dispositivo y lo envía de forma **saliente** a AV CORE en la nube.
+Como la LNA exige que **quien consulta esté en la misma subred que el dispositivo**, se requiere un **agente local**: un pequeño programa que corre en un equipo dentro de la red del cliente, lee el estado de cada dispositivo y lo envía de forma **saliente** al dashboard en la nube.
 
 ---
 
@@ -22,7 +22,7 @@ Como la LNA exige que **quien consulta esté en la misma subred que el dispositi
 | Monitoreo de **solo lectura** vía LNA `/status` | Control remoto (reiniciar, silenciar, actualizar firmware) |
 | Piloto en **1–2 salas** del cliente | Despliegue masivo a todas las salas |
 | Agente local + envío seguro a la nube | Alta disponibilidad / redundancia del agente |
-| Reutilización del dashboard de Salas existente | Automatizaciones y alertas avanzadas |
+| Dashboard con vistas de estado y métricas de fallas | Automatizaciones y alertas avanzadas |
 
 > Elegimos **solo lectura** en la Etapa 1 a propósito: entrega valor (visibilidad en tiempo real) con la **mínima superficie de riesgo**, lo que facilita la aprobación del equipo de ciberseguridad.
 
@@ -33,37 +33,35 @@ Como la LNA exige que **quien consulta esté en la misma subred que el dispositi
 ```
    RED DEL CLIENTE (misma subred que las salas)          NUBE
    ┌────────────────────────────────────────┐     ┌──────────────────────┐
-   │  Agente local AV CORE (Node.js)         │     │   AV CORE (Vercel)   │
+   │  Agente local (Node.js)                 │     │   Dashboard (nube)   │
    │  corre en un host del cliente           │ ──▶ │  Endpoint de ingesta │
    │                                         │HTTPS│  (autenticado)       │
    │   │ HTTPS local + token (LNA)           │ sal.└──────────┬───────────┘
    │   ▼                                     │                │
    │  GET https://<ip-dispositivo>/status   │                ▼
    │   ├─ Rally Bar                          │     ┌──────────────────────┐
-   │   ├─ Tap IP                             │     │  Supabase (Postgres) │
-   │   └─ ...                                │     │  mismas tablas salas │
+   │   ├─ Tap IP                             │     │  Base de datos       │
+   │   └─ ...                                │     │  gestionada          │
    └────────────────────────────────────────┘     └──────────────────────┘
 ```
 
 **Sentido de las conexiones:**
 - Agente → dispositivos: **HTTPS local**, dentro de la subred, autenticado por token LNA.
-- Agente → AV CORE nube: **HTTPS saliente**, autenticado (API key / mTLS).
+- Agente → dashboard en la nube: **HTTPS saliente**, autenticado (API key / mTLS).
 - **Entrante a la red del cliente desde internet: NINGUNA.** El agente solo hace conexiones salientes.
 
 ---
 
 ## 4. Componentes a desarrollar
 
-| # | Componente | Descripción | ¿Nuevo? |
-|---|---|---|---|
-| C1 | **Agente local** | Servicio Node.js que corre en la red del cliente; lee `/status` de cada dispositivo y envía a la nube. | Nuevo |
-| C2 | **Endpoint de ingesta** | Ruta en AV CORE que recibe los datos del agente, autenticada, y los guarda. | Nuevo |
-| C3 | **Autenticación agente↔nube** | API key por cliente/agente (o mTLS), rotable. | Nuevo |
-| C4 | **Almacenamiento** | Reutiliza tablas `logitech_devices` / `logitech_device_snapshots` (ya existen; marcamos origen = `collabos`). | Existente |
-| C5 | **Visualización** | Reutiliza el dashboard de Salas (`/admin/rooms`). Los datos del agente aparecen ahí. | Existente |
-| C6 | **Config LNA** | Campos `lna_user` / `lna_pass` por dispositivo (ya existen en el esquema). | Existente |
-
-> Ventaja clave: **el dashboard y la base de datos ya están listos**. La Etapa 1 es sobre todo el **agente** y el **canal seguro de ingesta**.
+| # | Componente | Descripción |
+|---|---|---|
+| C1 | **Agente local** | Servicio Node.js que corre en la red del cliente; lee `/status` de cada dispositivo y envía a la nube. |
+| C2 | **Endpoint de ingesta** | Ruta que recibe los datos del agente, autenticada, y los guarda. |
+| C3 | **Autenticación agente↔nube** | API key por agente (o mTLS), rotable. |
+| C4 | **Almacenamiento** | Base de datos gestionada; se registra el estado y el histórico (origen `collabos`). |
+| C5 | **Dashboard** | Vistas de estado por sala, agrupaciones y métricas de fallas. |
+| C6 | **Configuración LNA** | Credenciales LNA por dispositivo, almacenadas de forma cifrada. |
 
 ---
 
@@ -81,9 +79,9 @@ Como la LNA exige que **quien consulta esté en la misma subred que el dispositi
 - [ ] Imprimir el estado en consola (validación local).
 
 ### F2 · Canal de ingesta a la nube
-- [ ] Endpoint de ingesta en AV CORE (autenticado con API key por cliente).
+- [ ] Endpoint de ingesta (autenticado con API key por agente).
 - [ ] El agente envía el estado (HTTPS saliente) cada N minutos.
-- [ ] Guardar en `logitech_device_snapshots` marcando origen `collabos`.
+- [ ] Guardar el estado y el histórico en la base de datos (origen `collabos`).
 
 ### F3 · Multi-dispositivo + resiliencia
 - [ ] Recorrer varios dispositivos de una o dos salas.
@@ -122,7 +120,7 @@ Como la LNA exige que **quien consulta esté en la misma subred que el dispositi
 
 1. Habilitar LNA en los dispositivos piloto y cambiar contraseñas por defecto.
 2. Proveer un **host** (PC/VM) en la subred de las salas para el agente.
-3. Permitir **egreso HTTPS** desde ese host hacia AV CORE.
+3. Permitir **egreso HTTPS** desde ese host hacia el dashboard.
 4. Definir la **VLAN/segmento** donde vivirán agente y dispositivos.
 5. Acordar custodia y rotación de credenciales LNA.
 

@@ -1,7 +1,7 @@
-# Dossier de Seguridad — Integración AV CORE ↔ Logitech
+# Dossier de Seguridad — Dashboard de Monitoreo de Salas Logitech
 
 > Documento para revisión del equipo de Ciberseguridad del cliente.
-> Proveedor: MeetUp Colombia / AV CORE · Fecha: Julio 2026 · Versión 1.0
+> Proveedor: MeetUp Colombia · Fecha: Julio 2026 · Versión 1.0
 > Objetivo: describir arquitectura, flujos, controles y trazabilidad de la
 > integración, y acordar las validaciones para aprobar la conectividad.
 
@@ -9,10 +9,10 @@
 
 ## 0. Resumen ejecutivo (para decisores)
 
-- La integración vigente es **nube-a-nube**: AV CORE consume la **Logitech Sync Cloud API** mediante peticiones **HTTPS salientes con autenticación mutua (mTLS)**.
+- La integración principal es **nube-a-nube**: la plataforma consumirá la **Logitech Sync Cloud API** mediante peticiones **HTTPS salientes con autenticación mutua (mTLS)**.
 - **No requiere abrir ningún puerto entrante hacia la red del cliente.** No hay agentes ni escaneo dentro de la LAN del cliente en este modelo.
 - La autenticación se basa en un **certificado que el cliente genera y controla** desde su propio portal Logitech Sync, y que **puede revocar en cualquier momento**.
-- Las operaciones son de **solo lectura** (inventario y estado de salas). AV CORE **no controla ni reconfigura** dispositivos por este canal.
+- Las operaciones son de **solo lectura** (inventario y estado de salas). la plataforma **no controla ni reconfigura** dispositivos por este canal.
 - Se suma en **Etapa 1** un segundo componente: un **agente local CollabOS (LNA)** que corre **dentro de la red del cliente** para leer el estado de los dispositivos en tiempo real. Es de **solo lectura**, hace **únicamente conexiones salientes** (no abre puertos entrantes) y se despliega como **piloto en 1–2 salas**. Su diseño detallado está en `COLLABOS_ETAPA1.md` y **sí se somete a esta revisión**.
 
 ---
@@ -34,7 +34,7 @@
 
 ```
    ┌──────────────────────┐        HTTPS 443 / mTLS        ┌────────────────────────┐
-   │   AV CORE (nube)      │  ───────────────────────────▶ │  Logitech Sync Cloud   │
+   │   la plataforma (nube)      │  ───────────────────────────▶ │  Logitech Sync Cloud   │
    │   Vercel serverless   │      GET /places, /devices     │  (api.sync.logitech)   │
    │                       │  ◀─────────────────────────── │                        │
    └──────────┬───────────┘        JSON (solo lectura)      └───────────┬────────────┘
@@ -48,21 +48,21 @@
 ```
 
 **Puntos clave del flujo:**
-1. Los dispositivos Logitech del cliente **ya reportan su estado a la nube de Logitech** (es el funcionamiento normal de Sync). AV CORE **no** habla con los dispositivos.
-2. AV CORE inicia conexiones **salientes** hacia la nube de Logitech (nunca al revés).
+1. Los dispositivos Logitech del cliente **ya reportan su estado a la nube de Logitech** (es el funcionamiento normal de Sync). la plataforma **no** habla con los dispositivos.
+2. la plataforma inicia conexiones **salientes** hacia la nube de Logitech (nunca al revés).
 3. La sincronización se dispara por un **cron programado** (1 vez/día en el plan actual) y opcionalmente de forma **manual** por un administrador autenticado.
 4. Los datos se guardan en Supabase (PostgreSQL gestionado).
 
 **Sentido de las conexiones (importante para su firewall):**
 - **Entrante a la red del cliente:** NINGUNA.
 - **Saliente desde los equipos del cliente:** solo la que Logitech Sync ya requiere hoy (dispositivos → nube Logitech). No cambia con esta integración.
-- **AV CORE → Logitech:** saliente, 443, mTLS.
+- **la plataforma → Logitech:** saliente, 443, mTLS.
 
 ### 2.2 Modelo ETAPA 1 — Agente CollabOS / LNA en la red del cliente
 
 ```
    ┌────────────────────────┐   HTTPS saliente       ┌──────────────────┐
-   │  Agente local AV CORE   │ ─────────────────────▶ │  AV CORE (nube)  │
+   │  Agente local la plataforma   │ ─────────────────────▶ │  la plataforma (nube)  │
    │  (host en subred salas) │   (API key / mTLS)     └──────────────────┘
    │                         │
    │   │ HTTPS local + token (LNA)
@@ -72,7 +72,7 @@
    └─────────────────────────┘
 ```
 
-- Un host dedicado en la subred de las salas ejecuta el agente, con comunicación **local** a los dispositivos (HTTPS + token LNA) y **egreso HTTPS** hacia AV CORE.
+- Un host dedicado en la subred de las salas ejecuta el agente, con comunicación **local** a los dispositivos (HTTPS + token LNA) y **egreso HTTPS** hacia la plataforma.
 - **Este modelo sí toca la red interna**, por eso se rige por controles adicionales (segmentación/VLAN, hardening del host, mínimo privilegio, custodia de credenciales) descritos en `COLLABOS_ETAPA1.md`, sección 6.
 - **Solo lectura** (`/status`), **sin conectividad entrante** desde internet, y desplegado como **piloto en 1–2 salas**. Su aprobación **sí forma parte de esta sesión**.
 
@@ -82,9 +82,9 @@
 
 | Capa | Mecanismo |
 |---|---|
-| AV CORE ↔ Logitech | **mTLS** (TLS mutuo). Certificado cliente `certificate.pem` + llave `privateKey.pem` **generados por el cliente en su portal Sync** y revocables por él. |
+| la plataforma ↔ Logitech | **mTLS** (TLS mutuo). Certificado cliente `certificate.pem` + llave `privateKey.pem` **generados por el cliente en su portal Sync** y revocables por él. |
 | Endpoint de sincronización programada | Protegido por **secreto Bearer** (`CRON_SECRET`); rechaza toda llamada sin el token (HTTP 401). |
-| Usuarios de la plataforma | **Supabase Auth**; roles `superadmin` / `admin` / `cliente`. |
+| Usuarios de la plataforma | Autenticación gestionada con **control de acceso por roles** (mínimo privilegio). |
 | Acceso a configuración de certificados | Solo `admin`/`superadmin`. Los certificados se **escriben pero nunca se muestran** de vuelta en la interfaz. |
 | Aislamiento multi-cliente | Toda consulta está segmentada por `tenant_id`; RLS habilitado en las tablas. |
 
@@ -105,45 +105,42 @@
 | Estado/telemetría | online/offline, temperatura, humedad, estado de llamada | Media (privacidad de uso) |
 | Garantía | estado y fecha de vencimiento | Baja |
 
-### 4.2 Dónde residen
-- **Base de datos:** Supabase (PostgreSQL gestionado). *(Región a confirmar y declarar al cliente.)*
-- **Cómputo:** Vercel serverless (región actual `iad1`, EE. UU. Este). *(Relevante para residencia de datos.)*
+### 4.2 Dónde residirán
+- **Base de datos:** PostgreSQL gestionado (Supabase). La **región se definirá con el cliente** según sus requisitos de residencia de datos.
+- **Cómputo:** infraestructura serverless gestionada (Vercel). Región a acordar con el cliente.
 - **Cifrado en tránsito:** TLS 1.2+ en todos los tramos; mTLS hacia Logitech.
-- **Retención:** los "snapshots" de estado conforman la traza histórica; política de retención a definir con el cliente.
+- **Retención:** el histórico de estados conforma la traza temporal; la política de retención se acordará con el cliente.
 
 ---
 
 ## 5. Monitoreo, registros y trazabilidad (objetivo 3 del cliente)
 
-### 5.1 Existente hoy
-- Marca de **última sincronización** por cliente (`last_sync_at`).
-- **Histórico de estados** por dispositivo (tabla de snapshots) = traza temporal.
-- **Bitácora de auditoría** de acciones administrativas en la plataforma (`audit_logs`).
-- Resultado estructurado (JSON) de cada corrida del proceso de sincronización.
+La solución incorporará, como parte de su construcción:
 
-### 5.2 A implementar antes de producción (comprometido)
-- **Registro dedicado de cada sincronización**: fecha/hora, cliente, endpoint, resultado, conteos, duración y errores.
-- **Alertas** ante: fallo de sincronización, error de certificado/autenticación, y dispositivos offline.
-- **Monitoreo de errores** de aplicación (ej. Sentry) con retención y niveles de severidad.
+- **Registro dedicado de cada sincronización**: fecha/hora, endpoint consultado, resultado, conteos, duración y errores.
+- **Histórico de estados** por dispositivo (traza temporal para análisis).
+- **Bitácora de auditoría** de las acciones administrativas.
+- **Alertas** ante: fallo de sincronización, error de certificado/autenticación y dispositivos fuera de línea.
+- **Monitoreo de errores** de aplicación (ej. Sentry) con niveles de severidad.
 - **Vista de auditoría** consultable para el cliente (trazabilidad de accesos y sincronizaciones).
 
-Estos puntos se alinean 1:1 con "visibilidad y trazabilidad de las comunicaciones" y quedan como **entregables de la aprobación**.
+Estos puntos se alinean 1:1 con "visibilidad y trazabilidad de las comunicaciones" y quedan como **entregables comprometidos de la construcción**.
 
 ---
 
-## 6. Controles en endurecimiento (transparencia proactiva)
+## 6. Controles de seguridad que implementaremos
 
-Presentamos abiertamente los controles que estamos reforzando antes de operar en producción, con su plan:
+La construcción incorporará los siguientes controles como parte del diseño, no como añadidos posteriores:
 
-| # | Hallazgo / control | Estado actual | Plan y horizonte |
-|---|---|---|---|
-| 1 | **Cifrado en reposo** de certificados y credenciales sensibles (`certificate.pem`, `privateKey.pem`, credenciales locales) | Hoy en columnas de texto, protegidas por RLS y acceso vía *service role* | Cifrado en reposo con Supabase Vault / pgcrypto **o** gestor de secretos dedicado + **rotación de certificados**. Antes de go-live. |
-| 2 | **Trazabilidad dedicada** de la integración | Traza parcial (snapshots + auditoría general) | Registro específico de sincronizaciones + alertas (sección 5.2). Antes de go-live. |
-| 3 | **Mínimo privilegio** del certificado Logitech | Por definir con el portal Sync | Certificado de **solo lectura**; *allowlist* de IP de origen si el portal lo permite. |
-| 4 | **Protección del endpoint** de sincronización | Autenticado por Bearer (`CRON_SECRET`) | Añadir *rate limiting* / WAF y rotación del secreto. |
-| 5 | **Residencia de datos** | Cómputo en EE. UU. (Vercel iad1) | Declarar región de Supabase; evaluar región acorde a requisitos del cliente. |
+| # | Control | Cómo se implementará |
+|---|---|---|
+| 1 | **Cifrado en reposo** de certificados y credenciales sensibles (`certificate.pem`, `privateKey.pem`, credenciales locales) | Almacenamiento cifrado (Vault / pgcrypto o gestor de secretos dedicado) + **rotación de certificados**. |
+| 2 | **Trazabilidad dedicada** de la integración | Registro específico de cada sincronización + alertas (sección 5). |
+| 3 | **Mínimo privilegio** del certificado Logitech | Certificado de **solo lectura**; *allowlist* de IP de origen si el portal Sync lo permite. |
+| 4 | **Protección de los endpoints** internos | Autenticación por token, *rate limiting* y rotación de secretos. |
+| 5 | **Residencia de datos** | Región de datos acordada con el cliente según sus requisitos. |
 
-> Filosofía: preferimos declarar estos puntos y su plan antes que presentarlos como resueltos. Estamos abiertos a ajustar prioridades según los requisitos del cliente.
+> Estamos abiertos a ajustar y priorizar estos controles según los estándares que defina su equipo de ciberseguridad.
 
 ---
 

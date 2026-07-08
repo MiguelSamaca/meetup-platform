@@ -105,6 +105,10 @@ export default async function RoomsPage() {
               ⚠ {alertasActivas} alerta{(alertasActivas ?? 0) !== 1 ? 's' : ''} activa{(alertasActivas ?? 0) !== 1 ? 's' : ''}
             </Link>
           )}
+          <Link href="/admin/rooms/diagnostico"
+            className="px-4 py-2 bg-white border border-blue-600 text-blue-700 rounded-lg text-sm font-medium hover:bg-blue-50 transition-colors">
+            Prueba de conexión
+          </Link>
           {!cfg && (
             <Link href="/admin/rooms/configuracion"
               className="px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700 transition-colors">

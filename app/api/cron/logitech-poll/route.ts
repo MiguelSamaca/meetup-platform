@@ -73,15 +73,14 @@ async function syncTenant(
     private_key_pem: string
   }
 ): Promise<number> {
-  // Importación dinámica de undici para mTLS
-  const { request } = await import('undici')
-
-  const tlsOptions = {
-    connect: {
-      cert: cfg.cert_pem,
-      key:  cfg.private_key_pem,
-    },
-  }
+  // Importación dinámica de undici para mTLS.
+  // El certificado de cliente se envía vía Agent (dispatcher); NO como opción
+  // de request() — allí `connect` se ignora y el mTLS no se aplicaría.
+  const { Agent, request } = await import('undici')
+  const dispatcher = new Agent({
+    connect: { cert: cfg.cert_pem, key: cfg.private_key_pem },
+  })
+  const tlsOptions = { dispatcher }
 
   // 1. Obtener salas (places)
   const placesRes = await request(

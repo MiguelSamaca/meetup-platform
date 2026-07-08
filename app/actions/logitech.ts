@@ -96,3 +96,112 @@ export async function resolverAlerta(alertaId: string) {
   revalidatePath('/admin/rooms/alertas')
   revalidatePath('/admin/rooms')
 }
+
+/* ─────────────────────────────────────────────────────────────
+   PRUEBA EN VIVO (demo) — muestra el llamado a la API y los datos
+   crudos recolectados, para presentar al cliente en la reunión.
+───────────────────────────────────────────────────────────── */
+export interface DemoResultado {
+  ok:         boolean
+  request?:   { method: string; url: string; auth: string }
+  status?:    number
+  durationMs?: number
+  raw?:       string
+  parsed?:    unknown
+  error?:     string
+}
+
+function safeParse(text: string): unknown {
+  try { return JSON.parse(text) } catch { return undefined }
+}
+
+// Prueba la Sync Cloud API (nube-a-nube, mTLS) con los certificados configurados
+export async function probarConexionSyncDemo(): Promise<DemoResultado> {
+  const profile = await requireAdmin()
+  const admin   = createAdminClient()
+
+  const { data: cfg } = await admin
+    .from('logitech_org_config')
+    .select('logitech_org_id, cert_pem, private_key_pem')
+    .eq('tenant_id', profile.tenant_id!)
+    .maybeSingle()
+
+  if (!cfg?.cert_pem || !cfg?.private_key_pem) {
+    return { ok: false, error: 'Certificados mTLS no configurados. Cárgalos en Configuración.' }
+  }
+
+  const apiServer = process.env.LOGI_API_SERVER || 'https://api.sync.logitech.com/v1'
+  const url = `${apiServer}/orgs/${cfg.logitech_org_id}/places`
+  const req = { method: 'GET', url, auth: 'mTLS (certificado de cliente)' }
+
+  const { Agent, request } = await import('undici')
+  const dispatcher = new Agent({ connect: { cert: cfg.cert_pem, key: cfg.private_key_pem } })
+  const t0 = Date.now()
+  try {
+    const res  = await request(url, {
+      method: 'GET',
+      dispatcher,
+      headers: { accept: 'application/json' },
+    })
+    const body = await res.body.text()
+    return {
+      ok: res.statusCode >= 200 && res.statusCode < 300,
+      request: req,
+      status: res.statusCode,
+      durationMs: Date.now() - t0,
+      raw: body.slice(0, 4000),
+      parsed: safeParse(body),
+    }
+  } catch (e: unknown) {
+    return { ok: false, request: req, error: String(e), durationMs: Date.now() - t0 }
+  }
+}
+
+// Prueba la API local de CollabOS (LNA) contra un dispositivo en la red local.
+// Requiere ejecutarse desde un equipo con acceso a la subred del dispositivo.
+export async function probarConexionLNADemo(input: {
+  url:    string
+  user?:  string
+  pass?:  string
+  token?: string
+}): Promise<DemoResultado> {
+  await requireAdmin()
+
+  if (!input.url || !/^https?:\/\//i.test(input.url)) {
+    return { ok: false, error: 'URL inválida. Ej: https://192.168.1.50/status' }
+  }
+
+  const headers: Record<string, string> = { accept: 'application/json' }
+  let authLabel = 'ninguna'
+  if (input.token) {
+    headers.authorization = `Bearer ${input.token}`
+    authLabel = 'Bearer token'
+  } else if (input.user) {
+    headers.authorization = 'Basic ' + Buffer.from(`${input.user}:${input.pass ?? ''}`).toString('base64')
+    authLabel = 'Basic (usuario/contraseña)'
+  }
+  const req = { method: 'GET', url: input.url, auth: authLabel }
+
+  const { Agent, request } = await import('undici')
+  // Dispositivos locales usan certificado propio; se acepta en la red de confianza.
+  const dispatcher = new Agent({ connect: { rejectUnauthorized: false } })
+  const t0 = Date.now()
+  try {
+    const res = await request(input.url, {
+      method: 'GET',
+      headers,
+      dispatcher,
+    })
+    const body = await res.body.text()
+    return {
+      ok: res.statusCode >= 200 && res.statusCode < 300,
+      request: req,
+      status: res.statusCode,
+      durationMs: Date.now() - t0,
+      raw: body.slice(0, 4000),
+      parsed: safeParse(body),
+    }
+  } catch (e: unknown) {
+    return { ok: false, request: req, error: String(e), durationMs: Date.now() - t0 }
+  }
+}
