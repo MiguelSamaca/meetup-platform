@@ -13,17 +13,18 @@
 - **No requiere abrir ningún puerto entrante hacia la red del cliente.** No hay agentes ni escaneo dentro de la LAN del cliente en este modelo.
 - La autenticación se basa en un **certificado que el cliente genera y controla** desde su propio portal Logitech Sync, y que **puede revocar en cualquier momento**.
 - Las operaciones son de **solo lectura** (inventario y estado de salas). AV CORE **no controla ni reconfigura** dispositivos por este canal.
-- Un segundo modelo (agente **CollabOS** en LAN) está contemplado a futuro, **no está desplegado**, y se someterá a **una revisión de seguridad independiente** antes de considerarse.
+- Se suma en **Etapa 1** un segundo componente: un **agente local CollabOS (LNA)** que corre **dentro de la red del cliente** para leer el estado de los dispositivos en tiempo real. Es de **solo lectura**, hace **únicamente conexiones salientes** (no abre puertos entrantes) y se despliega como **piloto en 1–2 salas**. Su diseño detallado está en `COLLABOS_ETAPA1.md` y **sí se somete a esta revisión**.
 
 ---
 
 ## 1. Alcance
 
-| En alcance (hoy) | Fuera de alcance (futuro, revisión aparte) |
+| En alcance (esta revisión) | Fuera de alcance (Etapa 2+) |
 |---|---|
-| Sync Cloud API (nube-a-nube, mTLS, solo lectura) | Agente CollabOS en la red LAN del cliente |
-| Lectura de inventario y estado de salas/dispositivos | Control local de dispositivos en tiempo real |
-| Almacenamiento de metadatos y telemetría de estado | Acceso directo a la red interna del cliente |
+| **Sync Cloud API** (nube-a-nube, mTLS, solo lectura) | Control local de dispositivos (reiniciar, silenciar, firmware) |
+| **Agente CollabOS / LNA** (local, solo lectura, piloto 1–2 salas) — ver `COLLABOS_ETAPA1.md` | Despliegue masivo a todas las salas |
+| Lectura de inventario y estado de salas/dispositivos | Alta disponibilidad / redundancia del agente |
+| Almacenamiento de metadatos y telemetría de estado | — |
 
 ---
 
@@ -57,22 +58,23 @@
 - **Saliente desde los equipos del cliente:** solo la que Logitech Sync ya requiere hoy (dispositivos → nube Logitech). No cambia con esta integración.
 - **AV CORE → Logitech:** saliente, 443, mTLS.
 
-### 2.2 Modelo FUTURO — Agente CollabOS en LAN (NO desplegado)
+### 2.2 Modelo ETAPA 1 — Agente CollabOS / LNA en la red del cliente
 
 ```
-   ┌────────────────────────┐   HTTPS 443 saliente   ┌──────────────────┐
-   │  Agente CollabOS        │ ─────────────────────▶ │  AV CORE (nube)  │
-   │  (PC en LAN + VPN)      │                        └──────────────────┘
+   ┌────────────────────────┐   HTTPS saliente       ┌──────────────────┐
+   │  Agente local AV CORE   │ ─────────────────────▶ │  AV CORE (nube)  │
+   │  (host en subred salas) │   (API key / mTLS)     └──────────────────┘
    │                         │
-   │   ▲  LAN local (JWT)    │
-   │   │                     │
-   └───┼─────────────────────┘
-       ▼
-   Dispositivos Logitech en la misma red local
+   │   │ HTTPS local + token (LNA)
+   │   ▼                     │
+   │  GET https://<ip>/status  (solo lectura)
+   │   Dispositivos Logitech en la MISMA subred
+   └─────────────────────────┘
 ```
 
-- Requeriría un host dedicado en la red del cliente, con **egreso HTTPS** hacia AV CORE y comunicación **local** con los dispositivos.
-- **Este modelo sí toca la red interna** y por eso **se revisará por separado** con controles adicionales (segmentación, host hardening, VPN, mínimo privilegio). **No se solicita su aprobación en esta sesión.**
+- Un host dedicado en la subred de las salas ejecuta el agente, con comunicación **local** a los dispositivos (HTTPS + token LNA) y **egreso HTTPS** hacia AV CORE.
+- **Este modelo sí toca la red interna**, por eso se rige por controles adicionales (segmentación/VLAN, hardening del host, mínimo privilegio, custodia de credenciales) descritos en `COLLABOS_ETAPA1.md`, sección 6.
+- **Solo lectura** (`/status`), **sin conectividad entrante** desde internet, y desplegado como **piloto en 1–2 salas**. Su aprobación **sí forma parte de esta sesión**.
 
 ---
 
@@ -158,9 +160,11 @@ Presentamos abiertamente los controles que estamos reforzando antes de operar en
 
 Proponemos este checklist como criterio de aceptación conjunto:
 
-- [ ] Confirmar que el modelo aprobado es **solo Sync Cloud API** (nube-a-nube, sin agentes en LAN).
-- [ ] Verificar que **no se requiere conectividad entrante** a la red del cliente.
-- [ ] Validar la generación y **custodia del certificado** en el portal Sync del cliente (y procedimiento de revocación).
+- [ ] Confirmar los **dos componentes en alcance**: Sync Cloud API (nube) + agente CollabOS/LNA (piloto local de solo lectura).
+- [ ] Verificar que **no se requiere conectividad entrante** a la red del cliente en ninguno de los dos.
+- [ ] Validar la generación y **custodia del certificado** Sync en el portal del cliente (y procedimiento de revocación).
+- [ ] Acordar **prerrequisitos del agente CollabOS** (habilitar LNA por dispositivo, host dedicado, VLAN/segmento, egreso HTTPS) — ver `COLLABOS_ETAPA1.md` sección 7.
+- [ ] Acordar **custodia y rotación de credenciales LNA** y de la API key del agente.
 - [ ] Acordar el **alcance de datos** almacenados y la **política de retención**.
 - [ ] Confirmar los **controles de monitoreo/alertas** (sección 5.2) como entregables previos a producción.
 - [ ] Acordar el **cronograma de endurecimiento** (sección 6, especialmente el cifrado en reposo).
