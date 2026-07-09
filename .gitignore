@@ -49,3 +49,6 @@ docs/*.html
 # Certificados / llaves - NUNCA versionar
 *.pem
 *.key
+
+# Config local de preview (ruta especifica de cada maquina)
+.claude/launch.json

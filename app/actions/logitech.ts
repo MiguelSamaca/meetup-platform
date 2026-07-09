@@ -126,16 +126,30 @@ export async function probarConexionSyncDemo(): Promise<DemoResultado> {
     .eq('tenant_id', profile.tenant_id!)
     .maybeSingle()
 
-  if (!cfg?.cert_pem || !cfg?.private_key_pem) {
-    return { ok: false, error: 'Certificados mTLS no configurados. Cárgalos en Configuración.' }
+  // Certificados: primero de la configuración; si no, de variables de entorno
+  // (para pruebas locales sin guardar la llave privada en la base de datos).
+  let orgId = cfg?.logitech_org_id ?? undefined
+  let cert  = cfg?.cert_pem ?? undefined
+  let key   = cfg?.private_key_pem ?? undefined
+  if (!cert || !key) {
+    orgId = orgId ?? process.env.LOGI_ORG_ID
+    try {
+      const { readFileSync } = await import('node:fs')
+      if (process.env.LOGI_CERT_PATH) cert = readFileSync(process.env.LOGI_CERT_PATH, 'utf8')
+      if (process.env.LOGI_KEY_PATH)  key  = readFileSync(process.env.LOGI_KEY_PATH, 'utf8')
+    } catch { /* rutas no disponibles en este entorno */ }
+  }
+
+  if (!cert || !key || !orgId) {
+    return { ok: false, error: 'Faltan certificados u Org ID. Cárgalos en Configuración, o define LOGI_ORG_ID / LOGI_CERT_PATH / LOGI_KEY_PATH para pruebas locales.' }
   }
 
   const apiServer = process.env.LOGI_API_SERVER || 'https://api.sync.logitech.com/v1'
-  const url = `${apiServer}/org/${cfg.logitech_org_id}/place`
+  const url = `${apiServer}/org/${orgId}/place`
   const req = { method: 'GET', url, auth: 'mTLS (certificado de cliente)' }
 
   const { Agent, request } = await import('undici')
-  const dispatcher = new Agent({ connect: { cert: cfg.cert_pem, key: cfg.private_key_pem } })
+  const dispatcher = new Agent({ connect: { cert, key } })
   const t0 = Date.now()
   try {
     const res  = await request(url, {
