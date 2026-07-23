@@ -598,6 +598,46 @@ export default async function FlujoCajaPage({
   const ivaPeriodsArr = [...ivaByPeriodo.values()].sort((a, b) => a.mesPago.localeCompare(b.mesPago))
   const proximoIVA    = ivaPeriodsArr[0] ?? null
 
+  /* ══════════════════════════════════════════════
+     MOVIMIENTOS DE MESES ANTERIORES (histórico real)
+     Cobros ya recibidos y gastos con fecha pasada.
+  ══════════════════════════════════════════════ */
+  const movHistoricos: Movimiento[] = []
+  for (const oe of oes ?? []) {
+    const cliente  = contactoMap.get(oe.contacto_id ?? '') ?? 'Cliente'
+    const totalIva = oe.total_con_iva ?? Math.round((oe.total_cotizacion ?? 0) * 1.19)
+    const anticIva = Math.round(totalIva * (oe.anticipo_porcentaje ?? 50) / 100)
+    const saldoIva = Math.max(0, totalIva - anticIva)
+    if (oe.anticipo_recibido && oe.anticipo_fecha && oe.anticipo_fecha < mesHoy + '-01') {
+      movHistoricos.push({
+        tipo: 'entrada', concepto: `Anticipo — ${oe.consecutivo}`,
+        detalle: cliente, monto: anticIva, fecha: oe.anticipo_fecha, mes: toMes(oe.anticipo_fecha), oeId: oe.id,
+      })
+    }
+    if (oe.saldo_recibido && oe.saldo_fecha && oe.saldo_fecha < mesHoy + '-01') {
+      movHistoricos.push({
+        tipo: 'entrada', concepto: `Saldo — ${oe.consecutivo}`,
+        detalle: cliente, monto: saldoIva, fecha: oe.saldo_fecha, mes: toMes(oe.saldo_fecha), oeId: oe.id,
+      })
+    }
+  }
+  for (const g of gastosPasados) {
+    if (!g.fecha || g.fecha >= mesHoy + '-01') continue
+    movHistoricos.push({
+      tipo: 'salida', concepto: `Gasto — ${g.descripcion}`,
+      detalle: g.categoria ?? 'otros', monto: g.monto ?? 0, fecha: g.fecha, mes: toMes(g.fecha),
+    })
+  }
+  const mesesHist  = Array.from(new Set(movHistoricos.map(m => m.mes))).sort().reverse()
+  const gruposHist = mesesHist.map(mes => {
+    const movs     = movHistoricos.filter(m => m.mes === mes)
+    const entradas = movs.filter(m => m.tipo === 'entrada')
+    const salidas  = movs.filter(m => m.tipo === 'salida')
+    const totEnt   = entradas.reduce((s, m) => s + m.monto, 0)
+    const totSal   = salidas.reduce((s, m) => s + m.monto, 0)
+    return { mes, entradas, salidas, totEnt, totSal, neto: totEnt - totSal }
+  })
+
   return (
     <div>
       <Header vistaActual="general" />
@@ -782,6 +822,80 @@ export default async function FlujoCajaPage({
           </div>
         </div>
       </div>
+
+      {/* Movimientos de meses anteriores (histórico) */}
+      {gruposHist.length > 0 && (
+        <details className="rounded-xl border border-gray-200 overflow-hidden group mb-4">
+          <summary className="px-5 py-3.5 bg-gray-50 border-b border-gray-200 flex items-center justify-between gap-3 cursor-pointer list-none select-none">
+            <div className="flex items-center gap-2">
+              <span className="text-gray-400 text-xs font-bold transition-transform group-open:rotate-90">▶</span>
+              <div>
+                <h3 className="font-bold text-gray-900 text-sm">🕓 Movimientos anteriores</h3>
+                <p className="text-xs text-gray-400 mt-0.5">
+                  {gruposHist.length} mes{gruposHist.length !== 1 ? 'es' : ''} con movimientos ya realizados
+                </p>
+              </div>
+            </div>
+          </summary>
+          <div className="bg-white divide-y divide-gray-100">
+            {gruposHist.map(g => (
+              <details key={g.mes} className="group/mes">
+                <summary className="px-5 py-3 flex flex-wrap items-center justify-between gap-3 cursor-pointer list-none select-none hover:bg-gray-50">
+                  <div className="flex items-center gap-2 min-w-0">
+                    <span className="text-gray-300 text-xs font-bold transition-transform group-open/mes:rotate-90 shrink-0">▶</span>
+                    <h4 className="font-semibold text-gray-800 text-sm">{mesLabel(g.mes)}</h4>
+                    <span className="text-xs text-gray-400">
+                      {g.entradas.length} cobro{g.entradas.length !== 1 ? 's' : ''} · {g.salidas.length} gasto{g.salidas.length !== 1 ? 's' : ''}
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-4 text-sm">
+                    <div className="text-right">
+                      <p className="text-xs text-gray-400">Entradas</p>
+                      <p className="font-bold text-emerald-600">+${fmt(g.totEnt)}</p>
+                    </div>
+                    <div className="text-right">
+                      <p className="text-xs text-gray-400">Salidas</p>
+                      <p className="font-bold text-red-600">−${fmt(g.totSal)}</p>
+                    </div>
+                    <div className="text-right border-l border-gray-200 pl-4">
+                      <p className="text-xs text-gray-400">Neto</p>
+                      <p className={`font-bold ${g.neto >= 0 ? 'text-gray-900' : 'text-red-600'}`}>
+                        {g.neto >= 0 ? '+' : ''}{fmt(g.neto)}
+                      </p>
+                    </div>
+                  </div>
+                </summary>
+                <div className="divide-y divide-gray-50 bg-gray-50/30">
+                  {[...g.entradas, ...g.salidas].map((m, i) => (
+                    <div key={i} className="flex items-center px-5 py-2.5">
+                      <span className={`text-xs font-bold w-5 ${m.tipo === 'entrada' ? 'text-emerald-500' : 'text-red-500'}`}>
+                        {m.tipo === 'entrada' ? '↑' : '↓'}
+                      </span>
+                      <div className="flex-1 min-w-0 ml-2">
+                        <p className="text-sm font-medium text-gray-800 truncate">{m.concepto}</p>
+                        <p className="text-xs text-gray-400">{m.detalle}</p>
+                      </div>
+                      <div className="flex items-center gap-4 ml-4">
+                        {m.fecha && (
+                          <span className="text-xs text-gray-400">
+                            {new Date(m.fecha + 'T12:00:00').toLocaleDateString('es-CO')}
+                          </span>
+                        )}
+                        {m.oeId && (
+                          <Link href={`/admin/ordenes/${m.oeId}`} className="text-xs text-blue-400 hover:underline">Ver OE</Link>
+                        )}
+                        <span className={`font-bold text-sm w-36 text-right ${m.tipo === 'entrada' ? 'text-emerald-600' : 'text-red-600'}`}>
+                          {m.tipo === 'entrada' ? '+' : '−'}${fmt(m.monto)}
+                        </span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </details>
+            ))}
+          </div>
+        </details>
+      )}
 
       {/* Timeline detallado */}
       {gruposConAcum.length === 0 ? (
