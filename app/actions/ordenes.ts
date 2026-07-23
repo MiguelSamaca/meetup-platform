@@ -160,6 +160,23 @@ export async function crearOrdenEjecucion(
 }
 
 /* ─────────────────────────────────────────────────────────────
+   Cambiar tipo de venta (proyecto ↔ venta directa)
+───────────────────────────────────────────────────────────── */
+export async function cambiarTipoVenta(oeId: string, tipo: 'proyecto' | 'directa') {
+  const profile = await requireAdmin()
+  const admin   = createAdminClient()
+
+  await admin
+    .from('ordenes_ejecucion')
+    .update({ tipo_venta: tipo })
+    .eq('id', oeId)
+    .eq('tenant_id', profile.tenant_id!)
+
+  revalidatePath(`/admin/ordenes/${oeId}`)
+  revalidatePath('/admin/finanzas/movimientos')
+}
+
+/* ─────────────────────────────────────────────────────────────
    Actualizar datos de anticipo del cliente
 ───────────────────────────────────────────────────────────── */
 export async function actualizarAnticipo(

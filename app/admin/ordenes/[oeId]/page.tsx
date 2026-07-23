@@ -4,6 +4,7 @@ import { notFound } from 'next/navigation'
 import Link from 'next/link'
 import OrdenEjecucionPanel from '@/components/admin/OrdenEjecucionPanel'
 import { crearProyectoDesdeOE } from '@/app/actions/proyectos'
+import { cambiarTipoVenta }     from '@/app/actions/ordenes'
 import { fmt } from '@/lib/format'
 
 export default async function OrdenEjecucionPage({
@@ -100,18 +101,32 @@ export default async function OrdenEjecucionPage({
               🏗 {proyectoExistente.nombre}
             </Link>
           ) : (oe as any).tipo_venta === 'directa' ? (
-            <span className="inline-flex items-center gap-1.5 border border-gray-200 bg-gray-50 text-gray-500 text-sm font-medium px-4 py-2 rounded-lg">
-              🛒 Venta directa
-            </span>
+            <div className="flex items-center gap-2">
+              <span className="inline-flex items-center gap-1.5 border border-gray-200 bg-gray-50 text-gray-500 text-sm font-medium px-4 py-2 rounded-lg">
+                🛒 Venta directa
+              </span>
+              <form action={cambiarTipoVenta.bind(null, oeId, 'proyecto')}>
+                <button type="submit" className="text-xs text-purple-600 hover:underline">
+                  Convertir a proyecto
+                </button>
+              </form>
+            </div>
           ) : (
-            <form action={crearProyectoDesdeOE.bind(null, oeId)}>
-              <button
-                type="submit"
-                className="inline-flex items-center gap-1.5 bg-purple-500 hover:bg-purple-600 text-white text-sm font-semibold px-4 py-2 rounded-lg transition-colors"
-              >
-                🏗 Iniciar Proyecto
-              </button>
-            </form>
+            <div className="flex items-center gap-2">
+              <form action={crearProyectoDesdeOE.bind(null, oeId)}>
+                <button
+                  type="submit"
+                  className="inline-flex items-center gap-1.5 bg-purple-500 hover:bg-purple-600 text-white text-sm font-semibold px-4 py-2 rounded-lg transition-colors"
+                >
+                  🏗 Iniciar Proyecto
+                </button>
+              </form>
+              <form action={cambiarTipoVenta.bind(null, oeId, 'directa')}>
+                <button type="submit" className="text-xs text-gray-500 hover:underline whitespace-nowrap">
+                  Marcar venta directa
+                </button>
+              </form>
+            </div>
           )}
           <Link
             href={`/admin/contactos/${contacto?.id}/cotizaciones/${oe.cotizacion_id}`}

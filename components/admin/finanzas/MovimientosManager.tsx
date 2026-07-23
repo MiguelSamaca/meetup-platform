@@ -10,7 +10,6 @@ import {
   editarCuenta,
   eliminarCuenta,
   crearCategoria,
-  importarMovimientosExistentes,
   type NuevoMovimiento,
 } from '@/app/actions/movimientos'
 
@@ -98,18 +97,6 @@ export default function MovimientosManager({
   const [fClase, setFClase]   = useState('')
   const [fCuenta, setFCuenta] = useState('')
 
-  // Importación
-  const [importMsg, setImportMsg] = useState('')
-  function importar() {
-    setImportMsg('')
-    start(async () => {
-      const r = await importarMovimientosExistentes()
-      setImportMsg(r.importados > 0
-        ? `Se importaron ${r.importados} movimiento(s) de proyectos.`
-        : 'No hay movimientos nuevos por importar (ya están todos).')
-    })
-  }
-
   const cuentaNombre = useMemo(() => new Map(cuentas.map(c => [c.id, c.nombre])), [cuentas])
   const catNombre    = useMemo(() => new Map(categorias.map(c => [c.id, c.nombre])), [categorias])
   const proyNombre   = useMemo(() => new Map(proyectos.map(p => [p.id, p.nombre])), [proyectos])
@@ -189,21 +176,6 @@ export default function MovimientosManager({
 
   return (
     <div className="space-y-6">
-      {/* Importar movimientos ya hechos */}
-      <div className="bg-indigo-50 border border-indigo-200 rounded-xl p-4 flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <p className="text-sm font-medium text-indigo-900">¿Ya tienes cobros y gastos de proyectos?</p>
-          <p className="text-xs text-indigo-600 mt-0.5">
-            Importa los anticipos y saldos recibidos y los gastos ya registrados. No se duplican si lo repites.
-          </p>
-          {importMsg && <p className="text-xs font-semibold text-indigo-800 mt-1">{importMsg}</p>}
-        </div>
-        <button onClick={importar} disabled={pending}
-          className="px-4 py-2 bg-indigo-600 text-white rounded-lg text-sm font-medium hover:bg-indigo-700 disabled:opacity-50 transition-colors">
-          {pending ? 'Importando…' : 'Importar movimientos existentes'}
-        </button>
-      </div>
-
       {/* Resumen de cuentas */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         {cuentas.map(c => (
