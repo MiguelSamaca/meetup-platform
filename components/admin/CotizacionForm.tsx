@@ -5,6 +5,7 @@ import Link from 'next/link'
 import { crearCotizacion, editarCotizacion, type ItemInput } from '@/app/actions/cotizaciones'
 import FotoUploader from '@/components/admin/FotoUploader'
 import { fmt } from '@/lib/format'
+import { PROVEEDORES } from '@/lib/proveedores'
 
 export interface ProductoCatalogo {
   id:          string
@@ -271,6 +272,10 @@ export default function CotizacionForm({
       onKeyDown={e => { if (e.key === 'Enter') e.preventDefault() }}
       className="space-y-6"
     >
+      {/* Sugerencias de proveedores para los campos de proveedor */}
+      <datalist id="lista-proveedores">
+        {PROVEEDORES.map(p => <option key={p} value={p} />)}
+      </datalist>
 
       {/* Encabezado */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
@@ -393,9 +398,10 @@ export default function CotizacionForm({
                   {/* Proveedor */}
                   <td className="px-3 py-2">
                     <input
+                      list="lista-proveedores"
                       value={row.proveedor}
                       onChange={e => updateRow(row.key, { proveedor: e.target.value })}
-                      placeholder="McIntosh, Samsung…"
+                      placeholder="Audio Concept, Hometech…"
                       className="w-full min-w-[110px] px-2 py-1.5 border border-gray-200 rounded text-sm focus:outline-none focus:ring-1 focus:ring-emerald-400"
                     />
                   </td>

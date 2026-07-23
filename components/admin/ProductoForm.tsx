@@ -3,6 +3,7 @@
 import { useState, useTransition } from 'react'
 import Link from 'next/link'
 import FotoUploader from '@/components/admin/FotoUploader'
+import { PROVEEDORES } from '@/lib/proveedores'
 
 interface DefaultValues {
   descripcion: string
@@ -87,13 +88,17 @@ export default function ProductoForm({ action, defaultValues = {}, mode = 'nuevo
           />
         </div>
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">Proveedor / Marca</label>
+          <label className="block text-sm font-medium text-gray-700 mb-1">Proveedor</label>
           <input
             name="proveedor"
+            list="lista-proveedores"
             defaultValue={defaultValues.proveedor ?? ''}
             className="w-full px-4 py-2.5 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
-            placeholder="McIntosh, Samsung… (opcional)"
+            placeholder="Audio Concept, Hometech… (opcional)"
           />
+          <datalist id="lista-proveedores">
+            {PROVEEDORES.map(p => <option key={p} value={p} />)}
+          </datalist>
         </div>
       </div>
 
