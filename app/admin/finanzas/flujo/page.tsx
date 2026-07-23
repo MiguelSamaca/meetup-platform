@@ -1,7 +1,6 @@
 import { createAdminClient }                  from '@/lib/supabase/admin'
 import { getCurrentProfile }                   from '@/lib/auth'
 import Link                                    from 'next/link'
-import SaldoCajaEditor                         from '@/components/admin/finanzas/SaldoCajaEditor'
 import { getPeriodoIVA, type IVAPeriodicidad } from '@/lib/iva-colombia'
 import { fmt } from '@/lib/format'
 
@@ -53,10 +52,12 @@ export default async function FlujoCajaPage({
     { data: oes },
     { data: proveedores },
     { data: gastos },
+    { data: cuentasData },
+    { data: movsCaja },
   ] = await Promise.all([
     supabase
       .from('tenant_config')
-      .select('saldo_caja_actual, iva_periodicidad')
+      .select('iva_periodicidad')
       .eq('tenant_id', tid)
       .maybeSingle(),
     supabase
@@ -81,10 +82,32 @@ export default async function FlujoCajaPage({
       .select('id, proyecto_id, descripcion, monto, categoria, fecha')
       .eq('tenant_id', tid)
       .order('fecha'),
+    supabase
+      .from('cuentas')
+      .select('id, nombre, tipo, saldo_inicial')
+      .eq('tenant_id', tid).eq('activo', true).order('created_at'),
+    supabase
+      .from('movimientos')
+      .select('cuenta_id, tipo, monto')
+      .eq('tenant_id', tid),
   ])
 
-  const saldoCajaActual  = (config as any)?.saldo_caja_actual  ?? 0
   const ivaPeriodicidad: IVAPeriodicidad = (config as any)?.iva_periodicidad ?? 'cuatrimestral'
+
+  /* ── Saldo actual = estado de las cuentas (saldo inicial + movimientos) ── */
+  const cuentasCaja = (cuentasData ?? []) as { id: string; nombre: string; tipo: string; saldo_inicial: number }[]
+  const saldoPorCuenta = new Map<string, number>()
+  for (const c of cuentasCaja) saldoPorCuenta.set(c.id, c.saldo_inicial ?? 0)
+  let saldoSinCuenta = 0
+  for (const m of (movsCaja ?? []) as { cuenta_id: string | null; tipo: string; monto: number }[]) {
+    const delta = m.tipo === 'entrada' ? m.monto : -m.monto
+    if (m.cuenta_id && saldoPorCuenta.has(m.cuenta_id)) {
+      saldoPorCuenta.set(m.cuenta_id, (saldoPorCuenta.get(m.cuenta_id) ?? 0) + delta)
+    } else {
+      saldoSinCuenta += delta
+    }
+  }
+  const saldoCuentas = [...saldoPorCuenta.values()].reduce((s, v) => s + v, 0) + saldoSinCuenta
   const totalGastosFijos = (gastosFijos ?? []).reduce((s, g) => s + g.monto, 0)
 
   /* Gastos: separar pasados (para cálculo de caja) de futuros (para timeline) */
@@ -517,7 +540,7 @@ export default async function FlujoCajaPage({
   })
 
   /* Balance acumulado — arranca desde saldo en caja actual */
-  let acum = saldoCajaActual !== 0 ? saldoCajaActual : saldoCalculado
+  let acum = saldoCuentas
   const gruposConAcum = grupos.map(g => {
     if (g.mes === 'sin_fecha') return { ...g, saldoInicio: acum, saldoFin: acum }
     const saldoInicio = acum
@@ -575,7 +598,7 @@ export default async function FlujoCajaPage({
     }
   }
 
-  const saldoBaseProyeccion = saldoCajaActual !== 0 ? saldoCajaActual : saldoCalculado
+  const saldoBaseProyeccion = saldoCuentas
   let saldoRol = saldoBaseProyeccion
   const proyeccion = horizonte.map(m => {
     const cobros    = cobrosPorMes.get(m.key) ?? 0
@@ -644,25 +667,37 @@ export default async function FlujoCajaPage({
 
       {/* Banner superior: caja + gastos fijos + IVA DIAN */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
-        {/* Saldo en caja */}
+        {/* Saldo en caja (según cuentas) */}
         <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-5">
           <div className="flex items-start justify-between mb-3">
             <div>
-              <p className="text-xs font-semibold text-emerald-700 uppercase tracking-wide">💰 Saldo actual en caja</p>
-              <p className="text-xs text-emerald-600 mt-0.5">Ingresa el dinero disponible hoy</p>
+              <p className="text-xs font-semibold text-emerald-700 uppercase tracking-wide">💰 Saldo actual en cuentas</p>
+              <p className="text-xs text-emerald-600 mt-0.5">Suma del saldo de tus cuentas</p>
             </div>
+            <Link href="/admin/finanzas/movimientos"
+              className="text-xs bg-emerald-600 text-white px-3 py-1.5 rounded-lg hover:bg-emerald-700 transition-colors font-semibold whitespace-nowrap">
+              Movimientos
+            </Link>
           </div>
-          <SaldoCajaEditor
-            saldoActual={saldoCajaActual}
-            saldoCalculado={saldoCalculado}
-            detalleCaja={{
-              entradas:      entradasRecibidas,
-              salidasProv:   salidasProveedores,
-              salidasGastos: salidasGastosRealizados,
-            }}
-          />
+          <p className="text-2xl font-bold text-emerald-700">${fmt(saldoCuentas)}</p>
+          <div className="mt-2 space-y-0.5">
+            {cuentasCaja.map(c => (
+              <div key={c.id} className="flex justify-between text-xs text-emerald-700/80">
+                <span className="truncate">{c.nombre}</span>
+                <span className="font-medium">${fmt(saldoPorCuenta.get(c.id) ?? 0)}</span>
+              </div>
+            ))}
+            {saldoSinCuenta !== 0 && (
+              <div className="flex justify-between text-xs text-amber-600">
+                <span>Sin cuenta asignada</span><span>${fmt(saldoSinCuenta)}</span>
+              </div>
+            )}
+            {cuentasCaja.length === 0 && (
+              <p className="text-xs text-emerald-600">Crea tus cuentas en Movimientos.</p>
+            )}
+          </div>
           <p className="text-xs text-emerald-600 mt-2">
-            La proyección mensual parte de este valor y suma cobros / descuenta gastos fijos.
+            La proyección parte de este saldo. Para ajustarlo, registra un movimiento.
           </p>
         </div>
 

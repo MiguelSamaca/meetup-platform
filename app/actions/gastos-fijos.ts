@@ -90,26 +90,3 @@ export async function eliminarGastoFijo(id: string) {
   revalidatePath('/admin/finanzas/flujo')
   revalidatePath('/admin/finanzas')
 }
-
-/* ─── Actualizar saldo actual en caja ─── */
-export async function actualizarSaldoCaja(monto: number) {
-  const profile = await requireAdmin()
-  const admin   = createAdminClient()
-
-  await admin
-    .from('tenant_config')
-    .update({ saldo_caja_actual: monto })
-    .eq('tenant_id', profile.tenant_id!)
-
-  await logAudit({
-    tenantId:   profile.tenant_id,
-    userId:     profile.id,
-    userNombre: profile.nombre,
-    accion:     'actualizar_saldo_caja',
-    entidad:    'flujo_caja',
-    detalles:   { saldo_caja: monto },
-  })
-
-  revalidatePath('/admin/finanzas/flujo')
-  revalidatePath('/admin/finanzas')
-}

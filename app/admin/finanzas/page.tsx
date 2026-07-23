@@ -2,7 +2,6 @@ import { createAdminClient }     from '@/lib/supabase/admin'
 import { getCurrentProfile }      from '@/lib/auth'
 import { Suspense }               from 'react'
 import PeriodoSelector            from '@/components/admin/finanzas/PeriodoSelector'
-import SaldoCajaEditor            from '@/components/admin/finanzas/SaldoCajaEditor'
 import Link                       from 'next/link'
 import { getPeriodoActual }       from '@/lib/iva-colombia'
 import { fmt } from '@/lib/format'
@@ -83,7 +82,8 @@ export default async function FinanzasDashboardPage({
     { data: oes },
     { data: gastos },
     { count: proyActivos },
-    { data: configCaja },
+    { data: cuentasData },
+    { data: movsCaja },
     { data: gastosFijos },
   ] = await Promise.all([
     supabase
@@ -105,10 +105,13 @@ export default async function FinanzasDashboardPage({
       .eq('tenant_id', tid)
       .eq('estado', 'activo'),
     supabase
-      .from('tenant_config')
-      .select('saldo_caja_actual')
-      .eq('tenant_id', tid)
-      .maybeSingle(),
+      .from('cuentas')
+      .select('id, nombre, tipo, saldo_inicial')
+      .eq('tenant_id', tid).eq('activo', true).order('created_at'),
+    supabase
+      .from('movimientos')
+      .select('cuenta_id, tipo, monto')
+      .eq('tenant_id', tid),
     supabase
       .from('gastos_fijos')
       .select('monto')
@@ -116,7 +119,20 @@ export default async function FinanzasDashboardPage({
       .eq('activo', true),
   ])
 
-  const saldoCajaActual  = (configCaja as any)?.saldo_caja_actual ?? 0
+  /* ── Saldo actual = estado de las cuentas (saldo inicial + movimientos) ── */
+  const cuentasCaja = (cuentasData ?? []) as { id: string; nombre: string; tipo: string; saldo_inicial: number }[]
+  const saldoPorCuenta = new Map<string, number>()
+  for (const c of cuentasCaja) saldoPorCuenta.set(c.id, c.saldo_inicial ?? 0)
+  let saldoSinCuenta = 0
+  for (const m of (movsCaja ?? []) as { cuenta_id: string | null; tipo: string; monto: number }[]) {
+    const delta = m.tipo === 'entrada' ? m.monto : -m.monto
+    if (m.cuenta_id && saldoPorCuenta.has(m.cuenta_id)) {
+      saldoPorCuenta.set(m.cuenta_id, (saldoPorCuenta.get(m.cuenta_id) ?? 0) + delta)
+    } else {
+      saldoSinCuenta += delta
+    }
+  }
+  const saldoCuentas = [...saldoPorCuenta.values()].reduce((s, v) => s + v, 0) + saldoSinCuenta
   const totalGastosFijos = (gastosFijos ?? []).reduce((s, g) => s + (g.monto ?? 0), 0)
 
   /* ── IVA Colombia: período vigente para el recordatorio ── */
@@ -166,14 +182,29 @@ export default async function FinanzasDashboardPage({
 
       {/* KPIs */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
-        {/* Caja actual — el primero y más importante */}
+        {/* Caja actual — suma de las cuentas -*/}
         <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-5 col-span-2 lg:col-span-1">
           <div className="flex items-start justify-between mb-2">
             <p className="text-xs font-semibold text-emerald-700 uppercase tracking-wide">💰 Caja actual</p>
             <span className="text-xl">💰</span>
           </div>
-          <SaldoCajaEditor saldoActual={saldoCajaActual} />
-          <p className="text-xs text-emerald-600 mt-1">Actualiza cuando recibas pagos</p>
+          <p className="text-2xl font-bold text-emerald-700">${fmt(saldoCuentas)}</p>
+          <div className="mt-2 space-y-0.5">
+            {cuentasCaja.map(c => (
+              <div key={c.id} className="flex justify-between text-xs text-emerald-700/80">
+                <span className="truncate">{c.nombre}</span>
+                <span className="font-medium">${fmt(saldoPorCuenta.get(c.id) ?? 0)}</span>
+              </div>
+            ))}
+            {saldoSinCuenta !== 0 && (
+              <div className="flex justify-between text-xs text-amber-600">
+                <span>Sin cuenta asignada</span><span>${fmt(saldoSinCuenta)}</span>
+              </div>
+            )}
+          </div>
+          <Link href="/admin/finanzas/movimientos" className="text-xs text-emerald-600 hover:underline mt-2 inline-block">
+            {cuentasCaja.length === 0 ? 'Crea tus cuentas →' : 'Ver movimientos →'}
+          </Link>
         </div>
         <KPICard
           label="Total facturado"
@@ -207,9 +238,9 @@ export default async function FinanzasDashboardPage({
                 📅 Gastos fijos mensuales activos: <span className="text-amber-800">${fmt(totalGastosFijos)}/mes</span>
               </p>
               <div className="flex flex-wrap gap-4 text-xs text-amber-700">
-                <span>Con caja actual de <strong>${fmt(saldoCajaActual)}</strong> y sin nuevos cobros, la caja dura aprox. <strong>{totalGastosFijos > 0 ? Math.floor(saldoCajaActual / totalGastosFijos) : '∞'} mes{Math.floor(saldoCajaActual / totalGastosFijos) !== 1 ? 'es' : ''}</strong></span>
+                <span>Con caja actual de <strong>${fmt(saldoCuentas)}</strong> y sin nuevos cobros, la caja dura aprox. <strong>{totalGastosFijos > 0 ? Math.floor(saldoCuentas / totalGastosFijos) : '∞'} mes{Math.floor(saldoCuentas / totalGastosFijos) !== 1 ? 'es' : ''}</strong></span>
                 <span>·</span>
-                <span>Con cobros pendientes de <strong>${fmt(totalPendiente)}</strong>, en total tendrías <strong>${fmt(saldoCajaActual + totalPendiente)}</strong></span>
+                <span>Con cobros pendientes de <strong>${fmt(totalPendiente)}</strong>, en total tendrías <strong>${fmt(saldoCuentas + totalPendiente)}</strong></span>
               </div>
             </div>
             <Link href="/admin/finanzas/flujo" className="text-xs bg-amber-600 text-white px-3 py-2 rounded-lg hover:bg-amber-700 transition-colors font-semibold whitespace-nowrap">
