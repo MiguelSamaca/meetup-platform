@@ -6,7 +6,10 @@ import {
   crearMovimiento,
   eliminarMovimiento,
   crearCuenta,
+  editarCuenta,
+  eliminarCuenta,
   crearCategoria,
+  importarMovimientosExistentes,
   type NuevoMovimiento,
 } from '@/app/actions/movimientos'
 
@@ -57,6 +60,18 @@ export default function MovimientosManager({
   const [fClase, setFClase]   = useState('')
   const [fCuenta, setFCuenta] = useState('')
 
+  // Importación
+  const [importMsg, setImportMsg] = useState('')
+  function importar() {
+    setImportMsg('')
+    start(async () => {
+      const r = await importarMovimientosExistentes()
+      setImportMsg(r.importados > 0
+        ? `Se importaron ${r.importados} movimiento(s) de proyectos.`
+        : 'No hay movimientos nuevos por importar (ya están todos).')
+    })
+  }
+
   const cuentaNombre = useMemo(() => new Map(cuentas.map(c => [c.id, c.nombre])), [cuentas])
   const catNombre    = useMemo(() => new Map(categorias.map(c => [c.id, c.nombre])), [categorias])
   const proyNombre   = useMemo(() => new Map(proyectos.map(p => [p.id, p.nombre])), [proyectos])
@@ -105,6 +120,21 @@ export default function MovimientosManager({
 
   return (
     <div className="space-y-6">
+      {/* Importar movimientos ya hechos */}
+      <div className="bg-indigo-50 border border-indigo-200 rounded-xl p-4 flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <p className="text-sm font-medium text-indigo-900">¿Ya tienes cobros y gastos de proyectos?</p>
+          <p className="text-xs text-indigo-600 mt-0.5">
+            Importa los anticipos y saldos recibidos y los gastos ya registrados. No se duplican si lo repites.
+          </p>
+          {importMsg && <p className="text-xs font-semibold text-indigo-800 mt-1">{importMsg}</p>}
+        </div>
+        <button onClick={importar} disabled={pending}
+          className="px-4 py-2 bg-indigo-600 text-white rounded-lg text-sm font-medium hover:bg-indigo-700 disabled:opacity-50 transition-colors">
+          {pending ? 'Importando…' : 'Importar movimientos existentes'}
+        </button>
+      </div>
+
       {/* Resumen de cuentas */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         {cuentas.map(c => (
@@ -276,9 +306,10 @@ export default function MovimientosManager({
         <div className="px-5 pb-5 grid grid-cols-1 md:grid-cols-2 gap-6">
           <div>
             <p className="text-xs font-semibold text-gray-500 uppercase mb-2">Cuentas</p>
-            <ul className="text-sm text-gray-600 mb-3 space-y-1">
-              {cuentas.map(c => <li key={c.id}>• {c.nombre} <span className="text-gray-400 text-xs">({c.tipo})</span></li>)}
-            </ul>
+            <div className="space-y-2 mb-3">
+              {cuentas.map(c => <EditableCuenta key={c.id} cuenta={c} pending={pending} start={start} />)}
+            </div>
+            <p className="text-xs font-semibold text-gray-500 uppercase mb-1">Nueva cuenta</p>
             <CrearCuentaForm pending={pending} />
           </div>
           <div>
@@ -297,6 +328,45 @@ export default function MovimientosManager({
         </div>
       </details>
     </div>
+  )
+}
+
+function EditableCuenta({
+  cuenta, pending, start,
+}: {
+  cuenta: Cuenta; pending: boolean; start: (fn: () => void) => void
+}) {
+  const [editando, setEditando] = useState(false)
+
+  if (!editando) {
+    return (
+      <div className="flex items-center gap-2 text-sm text-gray-700 border border-gray-100 rounded-lg px-3 py-2">
+        <span className="flex-1">{cuenta.nombre} <span className="text-gray-400 text-xs capitalize">· {cuenta.tipo}</span></span>
+        <span className="text-xs text-gray-400">inicial ${fmt(cuenta.saldo_inicial ?? 0)}</span>
+        <button onClick={() => setEditando(true)} className="text-blue-500 hover:text-blue-700 text-xs">Editar</button>
+        <button
+          onClick={() => { if (confirm(`¿Eliminar la cuenta "${cuenta.nombre}"? Los movimientos quedarán sin cuenta.`)) start(() => eliminarCuenta(cuenta.id)) }}
+          disabled={pending} className="text-gray-300 hover:text-red-500 text-sm" title="Eliminar">✕</button>
+      </div>
+    )
+  }
+
+  return (
+    <form action={editarCuenta.bind(null, cuenta.id)} onSubmit={() => setEditando(false)}
+      className="flex flex-wrap gap-2 items-end border border-blue-200 bg-blue-50/40 rounded-lg p-2">
+      <input name="nombre" defaultValue={cuenta.nombre} required
+        className="flex-1 min-w-[140px] px-2 py-1.5 border border-gray-300 rounded-lg text-sm" />
+      <select name="tipo" defaultValue={cuenta.tipo} className="px-2 py-1.5 border border-gray-300 rounded-lg text-sm">
+        <option value="corriente">Corriente</option>
+        <option value="ahorros">Ahorros</option>
+        <option value="efectivo">Efectivo</option>
+        <option value="otro">Otro</option>
+      </select>
+      <input name="saldo_inicial" type="number" defaultValue={cuenta.saldo_inicial ?? 0}
+        className="w-28 px-2 py-1.5 border border-gray-300 rounded-lg text-sm" />
+      <button type="submit" className="px-3 py-1.5 bg-blue-600 text-white rounded-lg text-xs font-medium hover:bg-blue-700">Guardar</button>
+      <button type="button" onClick={() => setEditando(false)} className="px-2 py-1.5 text-gray-500 text-xs">Cancelar</button>
+    </form>
   )
 }
 
