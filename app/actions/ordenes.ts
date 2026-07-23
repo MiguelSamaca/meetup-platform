@@ -174,6 +174,19 @@ export async function actualizarAnticipo(
     .eq('id', oeId)
     .eq('tenant_id', profile.tenant_id!)
 
+  // Registrar cobro cuando se marca/desmarca el anticipo como recibido
+  if (data.anticipo_recibido !== undefined) {
+    await logAudit({
+      tenantId:   profile.tenant_id,
+      userId:     profile.id,
+      userNombre: profile.nombre,
+      accion:     'registrar_cobro',
+      entidad:    'orden_ejecucion',
+      entidadId:  oeId,
+      detalles:   { tipo: 'anticipo', recibido: data.anticipo_recibido },
+    })
+  }
+
   revalidatePath(`/admin/ordenes/${oeId}`)
   revalidatePath('/admin/finanzas/cobrar')
   revalidatePath('/admin/finanzas')
@@ -194,6 +207,19 @@ export async function actualizarSaldo(
     .update(data)
     .eq('id', oeId)
     .eq('tenant_id', profile.tenant_id!)
+
+  // Registrar cobro cuando se marca/desmarca el saldo como recibido
+  if (data.saldo_recibido !== undefined) {
+    await logAudit({
+      tenantId:   profile.tenant_id,
+      userId:     profile.id,
+      userNombre: profile.nombre,
+      accion:     'registrar_cobro',
+      entidad:    'orden_ejecucion',
+      entidadId:  oeId,
+      detalles:   { tipo: 'saldo', recibido: data.saldo_recibido },
+    })
+  }
 
   revalidatePath(`/admin/ordenes/${oeId}`)
   revalidatePath('/admin/finanzas/cobrar')
@@ -244,6 +270,17 @@ export async function actualizarAnticipoProv(
   }
 
   await query
+
+  await logAudit({
+    tenantId:   profile.tenant_id,
+    userId:     profile.id,
+    userNombre: profile.nombre,
+    accion:     'registrar_pago_proveedor',
+    entidad:    'orden_ejecucion',
+    entidadId:  oeId,
+    detalles:   { proveedor: proveedor ?? 'sin proveedor', pagado },
+  })
+
   revalidatePath(`/admin/ordenes/${oeId}`)
   revalidatePath('/admin/finanzas/pagar')
   revalidatePath('/admin/finanzas')

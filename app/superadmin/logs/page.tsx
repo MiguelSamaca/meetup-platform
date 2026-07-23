@@ -26,7 +26,24 @@ const ACCION_LABELS: Record<string, { label: string; color: string }> = {
   crear_admin:            { label: 'Nuevo admin',       color: 'bg-slate-100 text-slate-700'   },
   suspender_tenant:       { label: 'Suspendió empresa', color: 'bg-red-200 text-red-800'       },
   activar_tenant:         { label: 'Activó empresa',    color: 'bg-green-100 text-green-700'   },
+  crear_orden_ejecucion:  { label: 'Nueva orden',       color: 'bg-sky-100 text-sky-700'       },
+  completar_orden_ejecucion: { label: 'Completó orden', color: 'bg-sky-50 text-sky-600'        },
+  // Movimientos financieros
+  registrar_cobro:        { label: 'Cobro',             color: 'bg-emerald-100 text-emerald-700'},
+  registrar_pago_proveedor:{ label: 'Pago a proveedor', color: 'bg-rose-100 text-rose-700'     },
+  registrar_gasto:        { label: 'Gasto',             color: 'bg-rose-100 text-rose-700'     },
+  eliminar_gasto:         { label: 'Eliminó gasto',     color: 'bg-rose-50 text-rose-600'      },
+  crear_gasto_fijo:       { label: 'Nuevo gasto fijo',  color: 'bg-orange-100 text-orange-700' },
+  editar_gasto_fijo:      { label: 'Editó gasto fijo',  color: 'bg-orange-50 text-orange-600'  },
+  eliminar_gasto_fijo:    { label: 'Eliminó gasto fijo',color: 'bg-rose-50 text-rose-600'      },
+  actualizar_saldo_caja:  { label: 'Actualizó caja',    color: 'bg-emerald-50 text-emerald-600'},
 }
+
+/* Acciones que cuentan como movimiento financiero (para la pestaña Finanzas) */
+const ACCIONES_FINANZAS = [
+  'registrar_cobro', 'registrar_pago_proveedor', 'registrar_gasto', 'eliminar_gasto',
+  'crear_gasto_fijo', 'editar_gasto_fijo', 'eliminar_gasto_fijo', 'actualizar_saldo_caja',
+]
 
 function fmt(dateStr: string) {
   return new Date(dateStr).toLocaleString('es-CO', {
@@ -71,14 +88,16 @@ export default async function LogsPage({
   // Filtros por tab
   if (tabFilter === 'sesiones') query = query.in('accion', ['login', 'login_fallido', 'logout'])
   if (tabFilter === 'errores')  query = query.eq('resultado', 'error')
+  if (tabFilter === 'finanzas') query = query.in('accion', ACCIONES_FINANZAS)
 
   const { data: logs } = await query
 
   /* ── Conteos para tabs ── */
-  const [{ count: totalLogs }, { count: errores }, { count: sesiones }] = await Promise.all([
+  const [{ count: totalLogs }, { count: errores }, { count: sesiones }, { count: finanzas }] = await Promise.all([
     admin.from('audit_logs').select('*', { count: 'exact', head: true }),
     admin.from('audit_logs').select('*', { count: 'exact', head: true }).eq('resultado', 'error'),
     admin.from('audit_logs').select('*', { count: 'exact', head: true }).in('accion', ['login', 'login_fallido', 'logout']),
+    admin.from('audit_logs').select('*', { count: 'exact', head: true }).in('accion', ACCIONES_FINANZAS),
   ])
 
   /* ── Acciones únicas para el selector ── */
@@ -112,6 +131,7 @@ export default async function LogsPage({
       <div className="flex gap-1 mb-5 bg-gray-100 rounded-xl p-1 w-fit">
         {[
           { key: 'todos',    label: 'Todos',    count: totalLogs  ?? 0 },
+          { key: 'finanzas', label: 'Finanzas', count: finanzas   ?? 0 },
           { key: 'errores',  label: 'Errores',  count: errores    ?? 0 },
           { key: 'sesiones', label: 'Sesiones', count: sesiones   ?? 0 },
         ].map(tab => (

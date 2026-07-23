@@ -3,6 +3,7 @@
 import { revalidatePath } from 'next/cache'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { getCurrentProfile } from '@/lib/auth'
+import { logAudit } from '@/lib/audit'
 
 async function requireAdmin() {
   const profile = await getCurrentProfile()
@@ -40,6 +41,17 @@ export async function agregarGasto(
     })
 
   if (error) throw new Error(error.message)
+
+  await logAudit({
+    tenantId:   profile.tenant_id,
+    userId:     profile.id,
+    userNombre: profile.nombre,
+    accion:     'registrar_gasto',
+    entidad:    'gasto',
+    entidadId:  proyectoId,
+    detalles:   { categoria: data.categoria, monto: data.monto, descripcion: data.descripcion },
+  })
+
   revalidatePath(`/admin/proyectos/${proyectoId}`)
 }
 
@@ -52,6 +64,16 @@ export async function eliminarGasto(gastoId: string, proyectoId: string) {
     .delete()
     .eq('id', gastoId)
     .eq('tenant_id', profile.tenant_id!)
+
+  await logAudit({
+    tenantId:   profile.tenant_id,
+    userId:     profile.id,
+    userNombre: profile.nombre,
+    accion:     'eliminar_gasto',
+    entidad:    'gasto',
+    entidadId:  gastoId,
+    detalles:   { proyecto: proyectoId },
+  })
 
   revalidatePath(`/admin/proyectos/${proyectoId}`)
 }

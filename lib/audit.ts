@@ -35,6 +35,15 @@ export type AuditAccion =
   | 'importar_productos'
   | 'eliminar_producto'
   | 'importar_gastos'
+  // Movimientos financieros
+  | 'registrar_gasto'
+  | 'eliminar_gasto'
+  | 'crear_gasto_fijo'
+  | 'editar_gasto_fijo'
+  | 'eliminar_gasto_fijo'
+  | 'actualizar_saldo_caja'
+  | 'registrar_cobro'
+  | 'registrar_pago_proveedor'
 
 interface AuditParams {
   tenantId?:   string | null
