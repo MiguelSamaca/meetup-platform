@@ -37,12 +37,16 @@ const ACCION_LABELS: Record<string, { label: string; color: string }> = {
   editar_gasto_fijo:      { label: 'Editó gasto fijo',  color: 'bg-orange-50 text-orange-600'  },
   eliminar_gasto_fijo:    { label: 'Eliminó gasto fijo',color: 'bg-rose-50 text-rose-600'      },
   actualizar_saldo_caja:  { label: 'Actualizó caja',    color: 'bg-emerald-50 text-emerald-600'},
+  registrar_movimiento:   { label: 'Movimiento',        color: 'bg-emerald-100 text-emerald-700'},
+  eliminar_movimiento:    { label: 'Eliminó movimiento',color: 'bg-rose-50 text-rose-600'      },
+  crear_cuenta:           { label: 'Nueva cuenta',      color: 'bg-sky-100 text-sky-700'       },
 }
 
 /* Acciones que cuentan como movimiento financiero (para la pestaña Finanzas) */
 const ACCIONES_FINANZAS = [
   'registrar_cobro', 'registrar_pago_proveedor', 'registrar_gasto', 'eliminar_gasto',
   'crear_gasto_fijo', 'editar_gasto_fijo', 'eliminar_gasto_fijo', 'actualizar_saldo_caja',
+  'registrar_movimiento', 'eliminar_movimiento', 'crear_cuenta',
 ]
 
 function fmt(dateStr: string) {

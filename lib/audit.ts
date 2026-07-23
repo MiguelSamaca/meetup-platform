@@ -44,6 +44,9 @@ export type AuditAccion =
   | 'actualizar_saldo_caja'
   | 'registrar_cobro'
   | 'registrar_pago_proveedor'
+  | 'registrar_movimiento'
+  | 'eliminar_movimiento'
+  | 'crear_cuenta'
 
 interface AuditParams {
   tenantId?:   string | null
