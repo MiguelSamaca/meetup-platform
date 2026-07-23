@@ -447,8 +447,8 @@ function MovimientoRow({
   }
 
   return (
-    <div className="flex items-center px-5 py-3 hover:bg-gray-50">
-      <span className={`text-xs font-bold w-5 ${mv.tipo === 'entrada' ? 'text-emerald-500' : 'text-red-500'}`}>
+    <div className="flex items-center px-3 md:px-5 py-3 hover:bg-gray-50">
+      <span className={`text-xs font-bold w-5 shrink-0 ${mv.tipo === 'entrada' ? 'text-emerald-500' : 'text-red-500'}`}>
         {mv.tipo === 'entrada' ? '↑' : '↓'}
       </span>
       <div className="flex-1 min-w-0 ml-2">
@@ -467,12 +467,12 @@ function MovimientoRow({
           {!mv.proyecto_id && mv.orden_ejecucion_id && ` · 🛒 ${ventaNombre.get(mv.orden_ejecucion_id) ?? 'Venta'}`}
         </p>
       </div>
-      <span className={`font-bold text-sm w-32 text-right ${mv.tipo === 'entrada' ? 'text-emerald-600' : 'text-red-600'}`}>
+      <span className={`font-bold text-sm w-24 md:w-32 text-right shrink-0 ${mv.tipo === 'entrada' ? 'text-emerald-600' : 'text-red-600'}`}>
         {mv.tipo === 'entrada' ? '+' : '−'}${fmt(mv.monto)}
       </span>
-      <button onClick={() => setEditando(true)} className="ml-3 text-blue-500 hover:text-blue-700 text-xs">Editar</button>
+      <button onClick={() => setEditando(true)} className="ml-2 md:ml-3 text-blue-500 hover:text-blue-700 text-xs shrink-0">Editar</button>
       <button onClick={() => start(() => eliminarMovimiento(mv.id))} disabled={pending}
-        className="ml-2 text-gray-300 hover:text-red-500 text-sm" title="Eliminar">✕</button>
+        className="ml-2 text-gray-300 hover:text-red-500 text-sm shrink-0" title="Eliminar">✕</button>
     </div>
   )
 }

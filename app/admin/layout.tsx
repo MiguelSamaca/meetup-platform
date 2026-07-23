@@ -42,8 +42,9 @@ export default async function AdminLayout({ children }: { children: React.ReactN
       `}</style>
 
       <Sidebar tenantNombre={profile.tenant_nombre} brandColor={brandColor} modulos={modulos} />
-      <main className="flex-1 overflow-auto">
-        <div className="max-w-6xl mx-auto px-6 py-8">
+      {/* pt-14 en celular deja espacio a la barra superior fija */}
+      <main className="flex-1 min-w-0 overflow-auto pt-14 md:pt-0">
+        <div className="max-w-6xl mx-auto px-4 md:px-6 py-5 md:py-8">
           {children}
         </div>
       </main>

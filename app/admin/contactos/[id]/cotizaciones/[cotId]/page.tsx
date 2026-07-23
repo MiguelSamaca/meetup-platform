@@ -77,16 +77,16 @@ export default async function DetalleCotizacionPage({
 
   return (
     <div>
-      <div className="flex items-center gap-3 mb-6">
+      <div className="flex flex-wrap items-center gap-3 mb-6">
         <Link href={`/admin/contactos/${id}`} className="text-gray-400 hover:text-gray-600 text-sm">
           ← {contacto.nombre}
         </Link>
-        <span className="text-gray-300">/</span>
-        <h1 className="text-2xl font-bold text-gray-900">{cot.consecutivo}</h1>
-        <span className={`ml-2 text-xs font-medium px-2 py-0.5 rounded-full capitalize ${estadoColor[cot.estado]}`}>
+        <span className="text-gray-300 hidden sm:inline">/</span>
+        <h1 className="text-xl md:text-2xl font-bold text-gray-900">{cot.consecutivo}</h1>
+        <span className={`text-xs font-medium px-2 py-0.5 rounded-full capitalize ${estadoColor[cot.estado]}`}>
           {cot.estado}
         </span>
-        <div className="ml-auto flex items-center gap-3">
+        <div className="w-full md:w-auto md:ml-auto flex flex-wrap items-center gap-2 md:gap-3">
           {/* Orden de Ejecución */}
           {oeExistente ? (
             <Link

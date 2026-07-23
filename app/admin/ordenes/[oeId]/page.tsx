@@ -82,16 +82,16 @@ export default async function OrdenEjecucionPage({
   return (
     <div>
       {/* Breadcrumb */}
-      <div className="flex items-center gap-3 mb-6">
+      <div className="flex flex-wrap items-center gap-3 mb-6">
         <Link href="/admin/ordenes" className="text-gray-400 hover:text-gray-600 text-sm">
           ← Órdenes
         </Link>
-        <span className="text-gray-300">/</span>
-        <h1 className="text-2xl font-bold text-gray-900">{oe.consecutivo}</h1>
+        <span className="text-gray-300 hidden sm:inline">/</span>
+        <h1 className="text-xl md:text-2xl font-bold text-gray-900">{oe.consecutivo}</h1>
         <span className="ml-1 text-xs font-semibold px-2.5 py-0.5 rounded-full bg-blue-100 text-blue-700">
           ● Activa
         </span>
-        <div className="ml-auto flex items-center gap-3">
+        <div className="w-full md:w-auto md:ml-auto flex flex-wrap items-center gap-2 md:gap-3">
           {/* Proyecto vinculado */}
           {proyectoExistente ? (
             <Link

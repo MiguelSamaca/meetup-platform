@@ -168,9 +168,9 @@ export default async function FinanzasDashboardPage({
   return (
     <div>
       {/* Header */}
-      <div className="flex items-center justify-between mb-6">
+      <div className="flex flex-wrap items-center justify-between gap-3 mb-6">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">Dashboard Financiero</h1>
+          <h1 className="text-xl md:text-2xl font-bold text-gray-900">Dashboard Financiero</h1>
           <p className="text-sm text-gray-500 mt-1">
             Resumen financiero {PERIODO_LABEL[periodo]} — {cantOes} orden{cantOes !== 1 ? 'es' : ''} de ejecución
           </p>

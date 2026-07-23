@@ -81,6 +81,10 @@ export default function Sidebar({
     })
   }
 
+  // Menú lateral como cajón deslizable en celular
+  const [mobileOpen, setMobileOpen] = useState(false)
+  useEffect(() => { setMobileOpen(false) }, [pathname])   // cerrar al navegar
+
   async function signOut() {
     const supabase = createClient()
     await supabase.auth.signOut()
@@ -98,13 +102,36 @@ export default function Sidebar({
       : { style: undefined, className: 'text-gray-400 hover:bg-gray-800 hover:text-white' }
   }
 
+  const collapsedUI = collapsed && !mobileOpen
+
   return (
+    <>
+      {/* Barra superior — solo celular */}
+      <div className="md:hidden fixed top-0 inset-x-0 z-30 h-14 bg-gray-900 text-white flex items-center gap-3 px-4 print:hidden">
+        <button
+          onClick={() => setMobileOpen(true)}
+          aria-label="Abrir menú"
+          className="w-9 h-9 flex items-center justify-center rounded-lg hover:bg-gray-800 text-xl leading-none"
+        >
+          ☰
+        </button>
+        <span className="font-bold tracking-tight truncate">{tenantNombre ?? 'Admin'}</span>
+      </div>
+
+      {/* Fondo oscuro al abrir el menú en celular */}
+      {mobileOpen && (
+        <div
+          onClick={() => setMobileOpen(false)}
+          className="md:hidden fixed inset-0 z-40 bg-black/50 print:hidden"
+        />
+      )}
+
     <aside
-      className={`${collapsed ? 'w-14' : 'w-60'} shrink-0 bg-gray-900 text-white flex flex-col h-screen sticky top-0 transition-all duration-200 print:hidden`}
+      className={`w-60 ${collapsedUI ? 'md:w-14' : 'md:w-60'} shrink-0 bg-gray-900 text-white flex flex-col h-screen fixed md:sticky top-0 left-0 z-50 transform ${mobileOpen ? 'translate-x-0' : '-translate-x-full'} md:translate-x-0 transition-all duration-200 print:hidden`}
     >
       {/* Logo + toggle */}
-      <div className={`flex items-center border-b border-gray-700 ${collapsed ? 'justify-center py-4 px-2' : 'px-4 py-5'}`}>
-        {!collapsed && (
+      <div className={`flex items-center border-b border-gray-700 ${collapsedUI ? 'md:justify-center md:py-4 md:px-2 px-4 py-5' : 'px-4 py-5'}`}>
+        {!collapsedUI && (
           <div className="flex-1 min-w-0">
             <span className="text-lg font-bold tracking-tight truncate block" title={tenantNombre ?? ''}>
               {tenantNombre ?? 'Admin'}
@@ -112,12 +139,21 @@ export default function Sidebar({
             <span className="text-xs font-medium" style={{ color: brandColor }}>Panel de administración</span>
           </div>
         )}
+        {/* Colapsar — solo escritorio */}
         <button
           onClick={toggleCollapsed}
-          title={collapsed ? 'Expandir menú' : 'Colapsar menú'}
-          className="ml-auto flex-shrink-0 w-7 h-7 flex items-center justify-center rounded-md text-gray-400 hover:bg-gray-700 hover:text-white transition-colors text-sm"
+          title={collapsedUI ? 'Expandir menú' : 'Colapsar menú'}
+          className="ml-auto flex-shrink-0 w-7 h-7 hidden md:flex items-center justify-center rounded-md text-gray-400 hover:bg-gray-700 hover:text-white transition-colors text-sm"
         >
-          {collapsed ? '›' : '‹'}
+          {collapsedUI ? '›' : '‹'}
+        </button>
+        {/* Cerrar — solo celular */}
+        <button
+          onClick={() => setMobileOpen(false)}
+          aria-label="Cerrar menú"
+          className="ml-auto flex-shrink-0 w-8 h-8 flex md:hidden items-center justify-center rounded-md text-gray-400 hover:bg-gray-700 hover:text-white transition-colors"
+        >
+          ✕
         </button>
       </div>
 
@@ -127,10 +163,10 @@ export default function Sidebar({
           const { style, className } = activeStyle(pathname === '/admin')
           return (
             <Link href="/admin" title="Dashboard" style={style}
-              className={`flex items-center rounded-lg text-sm font-medium transition-colors ${collapsed ? 'justify-center px-0 py-2.5' : 'gap-3 px-3 py-2.5'} ${className}`}
+              className={`flex items-center rounded-lg text-sm font-medium transition-colors ${collapsedUI ? 'justify-center px-0 py-2.5' : 'gap-3 px-3 py-2.5'} ${className}`}
             >
               <span className="text-base">⊞</span>
-              {!collapsed && 'Dashboard'}
+              {!collapsedUI &&'Dashboard'}
             </Link>
           )
         })()}
@@ -145,21 +181,21 @@ export default function Sidebar({
           if (visibles.length === 0) return null
           return (
             <div key={section.label}>
-              {!collapsed && (
+              {!collapsedUI &&(
                 <p className="px-3 mb-1 text-[10px] font-bold tracking-widest text-gray-500 uppercase">
                   {section.label}
                 </p>
               )}
-              {collapsed && <div className="border-t border-gray-700 my-2" />}
+              {collapsedUI && <div className="border-t border-gray-700 my-2" />}
               <div className="space-y-0.5">
                 {visibles.map(item => {
                   const { style, className } = activeStyle(isActive(item.href))
                   return (
                     <Link key={item.href} href={item.href} title={item.label} style={style}
-                      className={`flex items-center rounded-lg text-sm font-medium transition-colors ${collapsed ? 'justify-center px-0 py-2.5' : 'gap-3 px-3 py-2.5'} ${className}`}
+                      className={`flex items-center rounded-lg text-sm font-medium transition-colors ${collapsedUI ? 'justify-center px-0 py-2.5' : 'gap-3 px-3 py-2.5'} ${className}`}
                     >
                       <span className="text-base">{item.icon}</span>
-                      {!collapsed && item.label}
+                      {!collapsedUI &&item.label}
                     </Link>
                   )
                 })}
@@ -175,10 +211,10 @@ export default function Sidebar({
           const { style, className } = activeStyle(isActive(configNav.href))
           return (
             <Link href={configNav.href} title={configNav.label} style={style}
-              className={`flex items-center rounded-lg text-sm font-medium transition-colors ${collapsed ? 'justify-center px-0 py-2.5' : 'gap-3 px-3 py-2.5'} ${className}`}
+              className={`flex items-center rounded-lg text-sm font-medium transition-colors ${collapsedUI ? 'justify-center px-0 py-2.5' : 'gap-3 px-3 py-2.5'} ${className}`}
             >
               <span className="text-base">{configNav.icon}</span>
-              {!collapsed && configNav.label}
+              {!collapsedUI &&configNav.label}
             </Link>
           )
         })()}
@@ -190,13 +226,14 @@ export default function Sidebar({
           onClick={signOut}
           title="Cerrar sesión"
           className={`w-full flex items-center rounded-lg text-sm font-medium text-gray-400 hover:bg-gray-800 hover:text-white transition-colors ${
-            collapsed ? 'justify-center px-0 py-2.5' : 'gap-3 px-3 py-2.5'
+            collapsedUI ? 'justify-center px-0 py-2.5' : 'gap-3 px-3 py-2.5'
           }`}
         >
           <span className="text-base">⇤</span>
-          {!collapsed && 'Cerrar sesión'}
+          {!collapsedUI &&'Cerrar sesión'}
         </button>
       </div>
     </aside>
+    </>
   )
 }
