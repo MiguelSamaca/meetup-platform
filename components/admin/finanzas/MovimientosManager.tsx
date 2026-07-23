@@ -117,7 +117,7 @@ export default function MovimientosManager({
     })
   }
 
-  const catsVisibles = categorias.filter(c => clasif === 'proyecto' || c.clase === clasif || c.clase === 'otro')
+  const catsVisibles = categorias.filter(c => c.clase === clasif || c.clase === 'otro')
 
   return (
     <div className="space-y-6">
