@@ -99,6 +99,27 @@ export default function MovimientosManager({
   const catNombre    = useMemo(() => new Map(categorias.map(c => [c.id, c.nombre])), [categorias])
   const proyNombre   = useMemo(() => new Map(proyectos.map(p => [p.id, p.nombre])), [proyectos])
 
+  // Conceptos ya guardados (para autocompletar) y su última clasificación/categoría.
+  // `movimientos` viene ordenado por fecha desc → el primero es el más reciente.
+  const conceptosPrevios = useMemo(() => {
+    const m = new Map<string, { clasificacion: string; categoria_id: string | null }>()
+    for (const mv of movimientos) {
+      const c = mv.concepto?.trim()
+      if (c && !m.has(c)) m.set(c, { clasificacion: mv.clasificacion, categoria_id: mv.categoria_id })
+    }
+    return m
+  }, [movimientos])
+
+  /** Al escribir/elegir el concepto, si ya se usó antes hereda clasificación y categoría. */
+  function onConceptoChange(v: string) {
+    setConcepto(v)
+    const previo = conceptosPrevios.get(v.trim())
+    if (previo) {
+      setClasif(previo.clasificacion)
+      setCatId(previo.categoria_id ?? '')
+    }
+  }
+
   // Saldo por cuenta = saldo_inicial + entradas − salidas
   const saldos = useMemo(() => {
     const m = new Map<string, number>()
@@ -135,7 +156,16 @@ export default function MovimientosManager({
     }
     start(async () => {
       await crearMovimiento(data)
-      setMonto(''); setConcepto(''); setRecu(false)
+      // Volver todo a valores por defecto (no heredar el movimiento anterior)
+      setTipo('salida')
+      setMonto('')
+      setFecha(hoy)
+      setConcepto('')
+      setCuentaId(cuentas[0]?.id ?? '')
+      setClasif('operacional')
+      setCatId('')
+      setProyId('')
+      setRecu(false)
     })
   }
 
@@ -221,8 +251,15 @@ export default function MovimientosManager({
             {/* Concepto */}
             <div className="col-span-2">
               <label className="block text-xs text-gray-500 mb-1">Concepto</label>
-              <input value={concepto} onChange={e => setConcepto(e.target.value)} placeholder="Descripción del movimiento"
+              <input
+                value={concepto}
+                onChange={e => onConceptoChange(e.target.value)}
+                list="conceptos-guardados"
+                placeholder="Descripción del movimiento"
                 className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+              <datalist id="conceptos-guardados">
+                {[...conceptosPrevios.keys()].map(c => <option key={c} value={c} />)}
+              </datalist>
             </div>
             {/* Clasificación */}
             <div>
