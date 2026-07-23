@@ -79,15 +79,16 @@ export async function crearCategoria(formData: FormData) {
 
 /* ─── Movimientos ─────────────────────────────────────────── */
 export interface NuevoMovimiento {
-  cuenta_id:     string | null
-  fecha:         string
-  tipo:          'entrada' | 'salida'
-  monto:         number
-  concepto:      string
-  clasificacion: string
-  categoria_id:  string | null
-  proyecto_id:   string | null
-  recurrente:    boolean
+  cuenta_id:          string | null
+  fecha:              string
+  tipo:               'entrada' | 'salida'
+  monto:              number
+  concepto:           string
+  clasificacion:      string
+  categoria_id:       string | null
+  proyecto_id:        string | null
+  orden_ejecucion_id?: string | null   // venta directa (sin proyecto)
+  recurrente:         boolean
 }
 
 export async function crearMovimiento(data: NuevoMovimiento) {
@@ -106,6 +107,7 @@ export async function crearMovimiento(data: NuevoMovimiento) {
     clasificacion: data.clasificacion || 'operacional',
     categoria_id:  data.categoria_id || null,
     proyecto_id:   data.proyecto_id || null,
+    orden_ejecucion_id: data.orden_ejecucion_id || null,
     recurrente:    data.recurrente ?? false,
     created_by:    profile.id,
   })
@@ -248,6 +250,7 @@ export async function editarMovimiento(id: string, data: NuevoMovimiento) {
     clasificacion: data.clasificacion || 'operacional',
     categoria_id:  data.categoria_id || null,
     proyecto_id:   data.proyecto_id || null,
+    orden_ejecucion_id: data.orden_ejecucion_id || null,
     recurrente:    data.recurrente ?? false,
   }).eq('id', id).eq('tenant_id', profile.tenant_id!)
   if (error) throw new Error(error.message)

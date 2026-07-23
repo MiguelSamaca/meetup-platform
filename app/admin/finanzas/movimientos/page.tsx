@@ -26,9 +26,26 @@ export default async function MovimientosPage() {
         .select('id, nombre')
         .eq('tenant_id', tid).order('created_at', { ascending: false }),
       admin.from('movimientos')
-        .select('id, fecha, tipo, monto, concepto, clasificacion, recurrente, cuenta_id, categoria_id, proyecto_id')
+        .select('id, fecha, tipo, monto, concepto, clasificacion, recurrente, cuenta_id, categoria_id, proyecto_id, orden_ejecucion_id')
         .eq('tenant_id', tid).order('fecha', { ascending: false }).limit(300),
     ])
+
+  /* Ventas directas (órdenes sin etapa de proyecto) con su cliente */
+  const { data: oesDirectas } = await admin
+    .from('ordenes_ejecucion')
+    .select('id, consecutivo, contacto_id')
+    .eq('tenant_id', tid).eq('tipo_venta', 'directa')
+    .order('created_at', { ascending: false })
+
+  const contactoIds = [...new Set((oesDirectas ?? []).map(o => o.contacto_id).filter(Boolean))]
+  const { data: contactos } = contactoIds.length > 0
+    ? await admin.from('contactos').select('id, nombre').in('id', contactoIds)
+    : { data: [] }
+  const nombrePorContacto = new Map((contactos ?? []).map(c => [c.id, c.nombre]))
+  const ventas = (oesDirectas ?? []).map(o => ({
+    id:     o.id,
+    label:  `${nombrePorContacto.get(o.contacto_id ?? '') ?? 'Cliente'} — ${o.consecutivo}`,
+  }))
 
   return (
     <div className="space-y-6">
@@ -48,6 +65,7 @@ export default async function MovimientosPage() {
         cuentas={cuentas ?? []}
         categorias={categorias ?? []}
         proyectos={proyectos ?? []}
+        ventas={ventas}
         movimientos={movimientos ?? []}
       />
     </div>

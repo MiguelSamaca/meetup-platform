@@ -17,7 +17,11 @@ async function requireAdmin() {
 /* ─────────────────────────────────────────────────────────────
    Crear OE desde cotización aprobada
 ───────────────────────────────────────────────────────────── */
-export async function crearOrdenEjecucion(cotizacionId: string, contactoId: string) {
+export async function crearOrdenEjecucion(
+  cotizacionId: string,
+  contactoId: string,
+  tipoVenta: 'proyecto' | 'directa' = 'proyecto',
+) {
   const profile = await requireAdmin()
   const admin   = createAdminClient()
 
@@ -86,6 +90,7 @@ export async function crearOrdenEjecucion(cotizacionId: string, contactoId: stri
       contacto_id:         contactoId,
       consecutivo,
       estado:              'activa',
+      tipo_venta:          tipoVenta,
       total_cotizacion:    totalCotizacion,
       total_con_iva:       totalConIva,
       anticipo_porcentaje,

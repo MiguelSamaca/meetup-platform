@@ -17,10 +17,24 @@ import {
 interface Cuenta    { id: string; nombre: string; tipo: string; saldo_inicial: number }
 interface Categoria { id: string; nombre: string; clase: string }
 interface Proyecto  { id: string; nombre: string }
+interface Venta     { id: string; label: string }
 interface Movimiento {
   id: string; fecha: string; tipo: string; monto: number; concepto: string | null
   clasificacion: string; recurrente: boolean
   cuenta_id: string | null; categoria_id: string | null; proyecto_id: string | null
+  orden_ejecucion_id?: string | null
+}
+
+/** Valor del selector combinado: 'p:<id>' proyecto · 'v:<id>' venta directa */
+function asociadoDe(mv: { proyecto_id: string | null; orden_ejecucion_id?: string | null }) {
+  if (mv.proyecto_id) return `p:${mv.proyecto_id}`
+  if (mv.orden_ejecucion_id) return `v:${mv.orden_ejecucion_id}`
+  return ''
+}
+function parseAsociado(v: string) {
+  if (v.startsWith('p:')) return { proyecto_id: v.slice(2), orden_ejecucion_id: null }
+  if (v.startsWith('v:')) return { proyecto_id: null, orden_ejecucion_id: v.slice(2) }
+  return { proyecto_id: null, orden_ejecucion_id: null }
 }
 
 const CLASES = [
@@ -61,9 +75,10 @@ function MoneyInput({
 }
 
 export default function MovimientosManager({
-  cuentas, categorias, proyectos, movimientos,
+  cuentas, categorias, proyectos, ventas, movimientos,
 }: {
-  cuentas: Cuenta[]; categorias: Categoria[]; proyectos: Proyecto[]; movimientos: Movimiento[]
+  cuentas: Cuenta[]; categorias: Categoria[]; proyectos: Proyecto[]
+  ventas: Venta[]; movimientos: Movimiento[]
 }) {
   const [pending, start] = useTransition()
   const hoy = new Date().toISOString().slice(0, 10)
@@ -76,7 +91,7 @@ export default function MovimientosManager({
   const [cuentaId, setCuentaId]   = useState(cuentas[0]?.id ?? '')
   const [clasif, setClasif]       = useState('operacional')
   const [categoriaId, setCatId]   = useState('')
-  const [proyectoId, setProyId]   = useState('')
+  const [asociado, setAsociado]   = useState('')   // 'p:<id>' | 'v:<id>' | ''
   const [recurrente, setRecu]     = useState(false)
 
   // Filtros lista
@@ -98,6 +113,7 @@ export default function MovimientosManager({
   const cuentaNombre = useMemo(() => new Map(cuentas.map(c => [c.id, c.nombre])), [cuentas])
   const catNombre    = useMemo(() => new Map(categorias.map(c => [c.id, c.nombre])), [categorias])
   const proyNombre   = useMemo(() => new Map(proyectos.map(p => [p.id, p.nombre])), [proyectos])
+  const ventaNombre  = useMemo(() => new Map(ventas.map(v => [v.id, v.label])), [ventas])
 
   // Conceptos ya guardados (para autocompletar) y su última clasificación/categoría.
   // `movimientos` viene ordenado por fecha desc → el primero es el más reciente.
@@ -152,7 +168,7 @@ export default function MovimientosManager({
     const data: NuevoMovimiento = {
       cuenta_id: cuentaId || null, fecha, tipo, monto: m, concepto,
       clasificacion: clasif, categoria_id: categoriaId || null,
-      proyecto_id: proyectoId || null, recurrente,
+      ...parseAsociado(asociado), recurrente,
     }
     start(async () => {
       await crearMovimiento(data)
@@ -164,7 +180,7 @@ export default function MovimientosManager({
       setCuentaId(cuentas[0]?.id ?? '')
       setClasif('operacional')
       setCatId('')
-      setProyId('')
+      setAsociado('')
       setRecu(false)
     })
   }
@@ -278,13 +294,22 @@ export default function MovimientosManager({
                 {catsVisibles.map(c => <option key={c.id} value={c.id}>{c.nombre}</option>)}
               </select>
             </div>
-            {/* Proyecto */}
+            {/* Proyecto o venta directa */}
             <div>
-              <label className="block text-xs text-gray-500 mb-1">Proyecto (opcional)</label>
-              <select value={proyectoId} onChange={e => setProyId(e.target.value)}
+              <label className="block text-xs text-gray-500 mb-1">Proyecto / Venta (opcional)</label>
+              <select value={asociado} onChange={e => setAsociado(e.target.value)}
                 className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
                 <option value="">— Ninguno —</option>
-                {proyectos.map(p => <option key={p.id} value={p.id}>{p.nombre}</option>)}
+                {proyectos.length > 0 && (
+                  <optgroup label="Proyectos">
+                    {proyectos.map(p => <option key={p.id} value={`p:${p.id}`}>{p.nombre}</option>)}
+                  </optgroup>
+                )}
+                {ventas.length > 0 && (
+                  <optgroup label="Ventas directas">
+                    {ventas.map(v => <option key={v.id} value={`v:${v.id}`}>{v.label}</option>)}
+                  </optgroup>
+                )}
               </select>
             </div>
             {/* Recurrente + guardar */}
@@ -328,8 +353,9 @@ export default function MovimientosManager({
           )}
           {movsFiltrados.map(mv => (
             <MovimientoRow key={mv.id} mv={mv} pending={pending} start={start}
-              cuentas={cuentas} categorias={categorias} proyectos={proyectos}
-              cuentaNombre={cuentaNombre} catNombre={catNombre} proyNombre={proyNombre} />
+              cuentas={cuentas} categorias={categorias} proyectos={proyectos} ventas={ventas}
+              cuentaNombre={cuentaNombre} catNombre={catNombre} proyNombre={proyNombre}
+              ventaNombre={ventaNombre} />
           ))}
         </div>
       </div>
@@ -369,11 +395,13 @@ export default function MovimientosManager({
 }
 
 function MovimientoRow({
-  mv, pending, start, cuentas, categorias, proyectos, cuentaNombre, catNombre, proyNombre,
+  mv, pending, start, cuentas, categorias, proyectos, ventas,
+  cuentaNombre, catNombre, proyNombre, ventaNombre,
 }: {
   mv: Movimiento; pending: boolean; start: (fn: () => void) => void
-  cuentas: Cuenta[]; categorias: Categoria[]; proyectos: Proyecto[]
-  cuentaNombre: Map<string, string>; catNombre: Map<string, string>; proyNombre: Map<string, string>
+  cuentas: Cuenta[]; categorias: Categoria[]; proyectos: Proyecto[]; ventas: Venta[]
+  cuentaNombre: Map<string, string>; catNombre: Map<string, string>
+  proyNombre: Map<string, string>; ventaNombre: Map<string, string>
 }) {
   const [editando, setEditando] = useState(false)
   const [tipo, setTipo]         = useState<'entrada' | 'salida'>(mv.tipo as 'entrada' | 'salida')
@@ -383,7 +411,7 @@ function MovimientoRow({
   const [cuentaId, setCuentaId] = useState(mv.cuenta_id ?? '')
   const [clasif, setClasif]     = useState(mv.clasificacion)
   const [categoriaId, setCatId] = useState(mv.categoria_id ?? '')
-  const [proyectoId, setProyId] = useState(mv.proyecto_id ?? '')
+  const [asociado, setAsociado] = useState(asociadoDe(mv))
   const [recurrente, setRecu]   = useState(mv.recurrente)
 
   function guardar() {
@@ -393,7 +421,7 @@ function MovimientoRow({
       await editarMovimiento(mv.id, {
         cuenta_id: cuentaId || null, fecha, tipo, monto: m, concepto,
         clasificacion: clasif, categoria_id: categoriaId || null,
-        proyecto_id: proyectoId || null, recurrente,
+        ...parseAsociado(asociado), recurrente,
       })
       setEditando(false)
     })
@@ -421,9 +449,18 @@ function MovimientoRow({
             <option value="">— Categoría —</option>
             {categorias.map(c => <option key={c.id} value={c.id}>{c.nombre}</option>)}
           </select>
-          <select value={proyectoId} onChange={e => setProyId(e.target.value)} className="px-2 py-1.5 border border-gray-300 rounded-lg text-sm">
-            <option value="">— Proyecto —</option>
-            {proyectos.map(p => <option key={p.id} value={p.id}>{p.nombre}</option>)}
+          <select value={asociado} onChange={e => setAsociado(e.target.value)} className="px-2 py-1.5 border border-gray-300 rounded-lg text-sm">
+            <option value="">— Proyecto / Venta —</option>
+            {proyectos.length > 0 && (
+              <optgroup label="Proyectos">
+                {proyectos.map(p => <option key={p.id} value={`p:${p.id}`}>{p.nombre}</option>)}
+              </optgroup>
+            )}
+            {ventas.length > 0 && (
+              <optgroup label="Ventas directas">
+                {ventas.map(v => <option key={v.id} value={`v:${v.id}`}>{v.label}</option>)}
+              </optgroup>
+            )}
           </select>
           <label className="flex items-center gap-2 text-xs text-gray-600">
             <input type="checkbox" checked={recurrente} onChange={e => setRecu(e.target.checked)} className="w-4 h-4" /> Cada mes
@@ -455,6 +492,7 @@ function MovimientoRow({
           {mv.cuenta_id && ` · ${cuentaNombre.get(mv.cuenta_id) ?? ''}`}
           {mv.categoria_id && ` · ${catNombre.get(mv.categoria_id) ?? ''}`}
           {mv.proyecto_id && ` · 📁 ${proyNombre.get(mv.proyecto_id) ?? ''}`}
+          {!mv.proyecto_id && mv.orden_ejecucion_id && ` · 🛒 ${ventaNombre.get(mv.orden_ejecucion_id) ?? 'Venta'}`}
         </p>
       </div>
       <span className={`font-bold text-sm w-32 text-right ${mv.tipo === 'entrada' ? 'text-emerald-600' : 'text-red-600'}`}>

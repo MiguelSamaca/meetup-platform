@@ -96,14 +96,26 @@ export default async function DetalleCotizacionPage({
               ▶ {oeExistente.consecutivo}
             </Link>
           ) : cot.estado === 'aprobada' ? (
-            <form action={crearOrdenEjecucion.bind(null, cotId, id)}>
-              <button
-                type="submit"
-                className="bg-emerald-500 hover:bg-emerald-600 text-white text-sm font-semibold px-4 py-2 rounded-lg transition-colors flex items-center gap-1.5"
-              >
-                ▶ Abrir proyecto
-              </button>
-            </form>
+            <div className="flex items-center gap-2">
+              <form action={crearOrdenEjecucion.bind(null, cotId, id, 'proyecto')}>
+                <button
+                  type="submit"
+                  title="Genera la orden y habilita la etapa de proyecto"
+                  className="bg-emerald-500 hover:bg-emerald-600 text-white text-sm font-semibold px-4 py-2 rounded-lg transition-colors flex items-center gap-1.5"
+                >
+                  ▶ Abrir como proyecto
+                </button>
+              </form>
+              <form action={crearOrdenEjecucion.bind(null, cotId, id, 'directa')}>
+                <button
+                  type="submit"
+                  title="Venta de producto sin etapa de proyecto"
+                  className="border border-emerald-400 hover:bg-emerald-50 text-emerald-700 text-sm font-semibold px-4 py-2 rounded-lg transition-colors flex items-center gap-1.5"
+                >
+                  ▶ Venta directa
+                </button>
+              </form>
+            </div>
           ) : null}
 
           {/* Duplicar — Server Action via form */}

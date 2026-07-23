@@ -19,7 +19,7 @@ export default async function OrdenEjecucionPage({
     supabase
       .from('ordenes_ejecucion')
       .select(`
-        id, consecutivo, estado, total_cotizacion, cotizacion_id, contacto_id,
+        id, consecutivo, estado, tipo_venta, total_cotizacion, cotizacion_id, contacto_id,
         anticipo_porcentaje, anticipo_monto, anticipo_fecha, anticipo_recibido,
         saldo_fecha, saldo_recibido, notas, created_at, completed_at
       `)
@@ -99,6 +99,10 @@ export default async function OrdenEjecucionPage({
             >
               🏗 {proyectoExistente.nombre}
             </Link>
+          ) : (oe as any).tipo_venta === 'directa' ? (
+            <span className="inline-flex items-center gap-1.5 border border-gray-200 bg-gray-50 text-gray-500 text-sm font-medium px-4 py-2 rounded-lg">
+              🛒 Venta directa
+            </span>
           ) : (
             <form action={crearProyectoDesdeOE.bind(null, oeId)}>
               <button
