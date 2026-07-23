@@ -192,6 +192,32 @@ export async function importarMovimientosExistentes(): Promise<{ importados: num
     })
   }
 
+  // Anticipos a proveedores ya pagados (sin fecha real → hoy, se ajusta luego)
+  const oeIds = (oes ?? []).map(o => o.id)
+  if (oeIds.length > 0) {
+    const [{ data: proveedores }, { data: items }] = await Promise.all([
+      admin.from('oe_proveedores').select('orden_ejecucion_id, proveedor, anticipo_monto').in('orden_ejecucion_id', oeIds),
+      admin.from('oe_items').select('orden_ejecucion_id, proveedor, anticipo_proveedor_pagado').in('orden_ejecucion_id', oeIds),
+    ])
+    for (const prov of proveedores ?? []) {
+      const provItems = (items ?? []).filter(
+        i => i.orden_ejecucion_id === prov.orden_ejecucion_id && i.proveedor === prov.proveedor
+      )
+      const pagado = provItems.length > 0 && provItems.every(i => i.anticipo_proveedor_pagado)
+      const monto  = prov.anticipo_monto ?? 0
+      const ref    = `${prov.orden_ejecucion_id}:${prov.proveedor}`
+      if (pagado && monto > 0 && !existe.has(`prov_anticipo:${ref}`)) {
+        const proyId = proyPorOE.get(prov.orden_ejecucion_id) ?? null
+        nuevos.push({
+          tenant_id: tid, tipo: 'salida', monto, fecha: hoy,
+          concepto: `Anticipo prov. — ${prov.proveedor ?? 'proveedor'}`,
+          clasificacion: proyId ? 'proyecto' : 'operacional',
+          proyecto_id: proyId, origen: 'prov_anticipo', origen_ref: ref, created_by: profile.id,
+        })
+      }
+    }
+  }
+
   if (nuevos.length > 0) {
     const { error } = await admin.from('movimientos').insert(nuevos)
     if (error) throw new Error(error.message)
@@ -205,6 +231,30 @@ export async function importarMovimientosExistentes(): Promise<{ importados: num
 
   revalidatePath('/admin/finanzas/movimientos')
   return { importados: nuevos.length }
+}
+
+export async function editarMovimiento(id: string, data: NuevoMovimiento) {
+  const profile = await requireAdmin()
+  const admin   = createAdminClient()
+
+  if (!data.monto || data.monto <= 0) throw new Error('El monto debe ser mayor a 0')
+
+  const { error } = await admin.from('movimientos').update({
+    cuenta_id:     data.cuenta_id || null,
+    fecha:         data.fecha,
+    tipo:          data.tipo,
+    monto:         data.monto,
+    concepto:      data.concepto?.trim() || null,
+    clasificacion: data.clasificacion || 'operacional',
+    categoria_id:  data.categoria_id || null,
+    proyecto_id:   data.proyecto_id || null,
+    recurrente:    data.recurrente ?? false,
+  }).eq('id', id).eq('tenant_id', profile.tenant_id!)
+  if (error) throw new Error(error.message)
+
+  revalidatePath('/admin/finanzas/movimientos')
+  revalidatePath('/admin/finanzas')
+  revalidatePath('/admin/finanzas/flujo')
 }
 
 export async function eliminarMovimiento(id: string) {

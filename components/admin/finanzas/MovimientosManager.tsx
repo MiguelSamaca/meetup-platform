@@ -4,6 +4,7 @@ import { useState, useTransition, useMemo } from 'react'
 import { fmt } from '@/lib/format'
 import {
   crearMovimiento,
+  editarMovimiento,
   eliminarMovimiento,
   crearCuenta,
   editarCuenta,
@@ -268,31 +269,9 @@ export default function MovimientosManager({
             <p className="px-5 py-10 text-center text-sm text-gray-400">No hay movimientos con estos filtros.</p>
           )}
           {movsFiltrados.map(mv => (
-            <div key={mv.id} className="flex items-center px-5 py-3 hover:bg-gray-50">
-              <span className={`text-xs font-bold w-5 ${mv.tipo === 'entrada' ? 'text-emerald-500' : 'text-red-500'}`}>
-                {mv.tipo === 'entrada' ? '↑' : '↓'}
-              </span>
-              <div className="flex-1 min-w-0 ml-2">
-                <div className="flex items-center gap-2 flex-wrap">
-                  <p className="text-sm font-medium text-gray-800 truncate">{mv.concepto || 'Sin concepto'}</p>
-                  <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded-full ${claseColor[mv.clasificacion] ?? 'bg-gray-100'}`}>
-                    {mv.clasificacion}
-                  </span>
-                  {mv.recurrente && <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded-full bg-teal-50 text-teal-700">↻ mensual</span>}
-                </div>
-                <p className="text-xs text-gray-400">
-                  {new Date(mv.fecha + 'T12:00:00').toLocaleDateString('es-CO')}
-                  {mv.cuenta_id && ` · ${cuentaNombre.get(mv.cuenta_id) ?? ''}`}
-                  {mv.categoria_id && ` · ${catNombre.get(mv.categoria_id) ?? ''}`}
-                  {mv.proyecto_id && ` · 📁 ${proyNombre.get(mv.proyecto_id) ?? ''}`}
-                </p>
-              </div>
-              <span className={`font-bold text-sm w-32 text-right ${mv.tipo === 'entrada' ? 'text-emerald-600' : 'text-red-600'}`}>
-                {mv.tipo === 'entrada' ? '+' : '−'}${fmt(mv.monto)}
-              </span>
-              <button onClick={() => start(() => eliminarMovimiento(mv.id))} disabled={pending}
-                className="ml-3 text-gray-300 hover:text-red-500 text-sm" title="Eliminar">✕</button>
-            </div>
+            <MovimientoRow key={mv.id} mv={mv} pending={pending} start={start}
+              cuentas={cuentas} categorias={categorias} proyectos={proyectos}
+              cuentaNombre={cuentaNombre} catNombre={catNombre} proyNombre={proyNombre} />
           ))}
         </div>
       </div>
@@ -327,6 +306,105 @@ export default function MovimientosManager({
           </div>
         </div>
       </details>
+    </div>
+  )
+}
+
+function MovimientoRow({
+  mv, pending, start, cuentas, categorias, proyectos, cuentaNombre, catNombre, proyNombre,
+}: {
+  mv: Movimiento; pending: boolean; start: (fn: () => void) => void
+  cuentas: Cuenta[]; categorias: Categoria[]; proyectos: Proyecto[]
+  cuentaNombre: Map<string, string>; catNombre: Map<string, string>; proyNombre: Map<string, string>
+}) {
+  const [editando, setEditando] = useState(false)
+  const [tipo, setTipo]         = useState<'entrada' | 'salida'>(mv.tipo as 'entrada' | 'salida')
+  const [monto, setMonto]       = useState(String(mv.monto))
+  const [fecha, setFecha]       = useState(mv.fecha)
+  const [concepto, setConcepto] = useState(mv.concepto ?? '')
+  const [cuentaId, setCuentaId] = useState(mv.cuenta_id ?? '')
+  const [clasif, setClasif]     = useState(mv.clasificacion)
+  const [categoriaId, setCatId] = useState(mv.categoria_id ?? '')
+  const [proyectoId, setProyId] = useState(mv.proyecto_id ?? '')
+  const [recurrente, setRecu]   = useState(mv.recurrente)
+
+  function guardar() {
+    const m = Number(monto)
+    if (!m || m <= 0) return
+    start(async () => {
+      await editarMovimiento(mv.id, {
+        cuenta_id: cuentaId || null, fecha, tipo, monto: m, concepto,
+        clasificacion: clasif, categoria_id: categoriaId || null,
+        proyecto_id: proyectoId || null, recurrente,
+      })
+      setEditando(false)
+    })
+  }
+
+  if (editando) {
+    return (
+      <div className="px-5 py-3 bg-blue-50/40 border-l-2 border-blue-400">
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+          <div className="flex rounded-lg overflow-hidden border border-gray-300 col-span-2 md:col-span-1">
+            <button type="button" onClick={() => setTipo('salida')} className={`flex-1 py-1.5 text-xs font-medium ${tipo === 'salida' ? 'bg-red-500 text-white' : 'bg-white text-gray-600'}`}>Salida</button>
+            <button type="button" onClick={() => setTipo('entrada')} className={`flex-1 py-1.5 text-xs font-medium ${tipo === 'entrada' ? 'bg-emerald-500 text-white' : 'bg-white text-gray-600'}`}>Entrada</button>
+          </div>
+          <input type="number" value={monto} onChange={e => setMonto(e.target.value)} placeholder="Monto" className="px-2 py-1.5 border border-gray-300 rounded-lg text-sm" />
+          <input type="date" value={fecha} onChange={e => setFecha(e.target.value)} className="px-2 py-1.5 border border-gray-300 rounded-lg text-sm" />
+          <select value={cuentaId} onChange={e => setCuentaId(e.target.value)} className="px-2 py-1.5 border border-gray-300 rounded-lg text-sm">
+            <option value="">— Sin cuenta —</option>
+            {cuentas.map(c => <option key={c.id} value={c.id}>{c.nombre}</option>)}
+          </select>
+          <input value={concepto} onChange={e => setConcepto(e.target.value)} placeholder="Concepto" className="col-span-2 px-2 py-1.5 border border-gray-300 rounded-lg text-sm" />
+          <select value={clasif} onChange={e => setClasif(e.target.value)} className="px-2 py-1.5 border border-gray-300 rounded-lg text-sm">
+            {CLASES.map(c => <option key={c.v} value={c.v}>{c.l}</option>)}
+          </select>
+          <select value={categoriaId} onChange={e => setCatId(e.target.value)} className="px-2 py-1.5 border border-gray-300 rounded-lg text-sm">
+            <option value="">— Categoría —</option>
+            {categorias.map(c => <option key={c.id} value={c.id}>{c.nombre}</option>)}
+          </select>
+          <select value={proyectoId} onChange={e => setProyId(e.target.value)} className="px-2 py-1.5 border border-gray-300 rounded-lg text-sm">
+            <option value="">— Proyecto —</option>
+            {proyectos.map(p => <option key={p.id} value={p.id}>{p.nombre}</option>)}
+          </select>
+          <label className="flex items-center gap-2 text-xs text-gray-600">
+            <input type="checkbox" checked={recurrente} onChange={e => setRecu(e.target.checked)} className="w-4 h-4" /> Cada mes
+          </label>
+        </div>
+        <div className="flex justify-end gap-2 mt-2">
+          <button onClick={() => setEditando(false)} className="px-3 py-1.5 text-gray-500 text-xs">Cancelar</button>
+          <button onClick={guardar} disabled={pending} className="px-4 py-1.5 bg-blue-600 text-white rounded-lg text-xs font-medium hover:bg-blue-700 disabled:opacity-50">Guardar</button>
+        </div>
+      </div>
+    )
+  }
+
+  return (
+    <div className="flex items-center px-5 py-3 hover:bg-gray-50">
+      <span className={`text-xs font-bold w-5 ${mv.tipo === 'entrada' ? 'text-emerald-500' : 'text-red-500'}`}>
+        {mv.tipo === 'entrada' ? '↑' : '↓'}
+      </span>
+      <div className="flex-1 min-w-0 ml-2">
+        <div className="flex items-center gap-2 flex-wrap">
+          <p className="text-sm font-medium text-gray-800 truncate">{mv.concepto || 'Sin concepto'}</p>
+          <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded-full ${claseColor[mv.clasificacion] ?? 'bg-gray-100'}`}>
+            {mv.clasificacion}
+          </span>
+          {mv.recurrente && <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded-full bg-teal-50 text-teal-700">↻ mensual</span>}
+        </div>
+        <p className="text-xs text-gray-400">
+          {new Date(mv.fecha + 'T12:00:00').toLocaleDateString('es-CO')}
+          {mv.cuenta_id && ` · ${cuentaNombre.get(mv.cuenta_id) ?? ''}`}
+          {mv.categoria_id && ` · ${catNombre.get(mv.categoria_id) ?? ''}`}
+          {mv.proyecto_id && ` · 📁 ${proyNombre.get(mv.proyecto_id) ?? ''}`}
+        </p>
+      </div>
+      <span className={`font-bold text-sm w-32 text-right ${mv.tipo === 'entrada' ? 'text-emerald-600' : 'text-red-600'}`}>
+        {mv.tipo === 'entrada' ? '+' : '−'}${fmt(mv.monto)}
+      </span>
+      <button onClick={() => setEditando(true)} className="ml-3 text-blue-500 hover:text-blue-700 text-xs">Editar</button>
+      <button onClick={() => start(() => eliminarMovimiento(mv.id))} disabled={pending}
+        className="ml-2 text-gray-300 hover:text-red-500 text-sm" title="Eliminar">✕</button>
     </div>
   )
 }
