@@ -18,6 +18,7 @@ export async function crearProducto(formData: FormData) {
   const profile     = await requireAdmin()
   const admin       = createAdminClient()
   const referencia  = (formData.get('referencia')  as string)?.trim() || null
+  const marca       = (formData.get('marca')       as string)?.trim() || null
   const proveedor   = (formData.get('proveedor')   as string)?.trim() || null
   const descripcion = (formData.get('descripcion') as string).trim()
   const unidad      = (formData.get('unidad')      as string)?.trim() || 'und'
@@ -25,7 +26,7 @@ export async function crearProducto(formData: FormData) {
 
   const { data, error } = await admin.from('productos').insert({
     tenant_id: profile.tenant_id,
-    referencia, proveedor, descripcion, unidad, foto_url, activo: true,
+    referencia, marca, proveedor, descripcion, unidad, foto_url, activo: true,
   }).select('id').single()
 
   if (error) throw new Error(error.message)
@@ -48,6 +49,7 @@ export async function editarProducto(id: string, formData: FormData) {
   const profile     = await requireAdmin()
   const admin       = createAdminClient()
   const referencia  = (formData.get('referencia')  as string)?.trim() || null
+  const marca       = (formData.get('marca')       as string)?.trim() || null
   const proveedor   = (formData.get('proveedor')   as string)?.trim() || null
   const descripcion = (formData.get('descripcion') as string).trim()
   const unidad      = (formData.get('unidad')      as string)?.trim() || 'und'
@@ -56,7 +58,7 @@ export async function editarProducto(id: string, formData: FormData) {
 
   const { error } = await admin
     .from('productos')
-    .update({ referencia, proveedor, descripcion, unidad, activo, foto_url, updated_at: new Date().toISOString() })
+    .update({ referencia, marca, proveedor, descripcion, unidad, activo, foto_url, updated_at: new Date().toISOString() })
     .eq('id', id)
     .eq('tenant_id', profile.tenant_id!)
 

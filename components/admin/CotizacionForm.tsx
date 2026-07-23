@@ -10,6 +10,7 @@ import { PROVEEDORES } from '@/lib/proveedores'
 export interface ProductoCatalogo {
   id:          string
   referencia:  string | null
+  marca:       string | null
   proveedor:   string | null
   descripcion: string
   unidad:      string
@@ -18,6 +19,7 @@ export interface ProductoCatalogo {
 
 export interface InitialItem {
   referencia:      string | null
+  marca:           string | null
   proveedor:       string | null
   descripcion:     string
   cantidad:        number
@@ -47,6 +49,7 @@ interface Props {
 interface ItemRow {
   key:             number
   referencia:      string
+  marca:           string
   proveedor:       string
   descripcion:     string
   cantidad:        string
@@ -61,7 +64,7 @@ interface ItemRow {
 }
 
 const emptyRow = (key: number): ItemRow => ({
-  key, referencia: '', proveedor: '', descripcion: '', cantidad: '1',
+  key, referencia: '', marca: '', proveedor: '', descripcion: '', cantidad: '1',
   precio_unitario: '', descuento: '0', moneda_costo: 'COP', costo_unitario: '', trm: '',
   foto_url: '', buscando: false, query: '',
 })
@@ -70,6 +73,7 @@ function itemToRow(it: InitialItem, key: number): ItemRow {
   return {
     key,
     referencia:      it.referencia ?? '',
+    marca:           it.marca      ?? '',
     proveedor:       it.proveedor  ?? '',
     descripcion:     it.descripcion,
     cantidad:        String(it.cantidad),
@@ -167,6 +171,7 @@ export default function CotizacionForm({
   function seleccionarProducto(key: number, p: ProductoCatalogo) {
     updateRow(key, {
       referencia:     p.referencia ?? '',
+      marca:          p.marca      ?? '',
       proveedor:      p.proveedor  ?? '',
       descripcion:    p.descripcion,
       foto_url:       p.foto_url   ?? '',
@@ -221,6 +226,7 @@ export default function CotizacionForm({
       .filter(r => r.descripcion.trim())
       .map((r, i) => ({
         referencia:      r.referencia.trim(),
+        marca:           r.marca.trim(),
         proveedor:       r.proveedor.trim(),
         descripcion:     r.descripcion.trim(),
         cantidad:        parseFloat(r.cantidad)        || 1,
@@ -333,7 +339,8 @@ export default function CotizacionForm({
               <th className="text-center px-1 py-2.5 font-semibold text-gray-600 w-12">#</th>
               <th className="text-center px-2 py-2.5 font-semibold text-gray-600 w-20">Foto</th>
               <th className="text-left px-3 py-2.5 font-semibold text-gray-600 w-36">Ref.</th>
-              <th className="text-left px-3 py-2.5 font-semibold text-gray-600 w-36">Proveedor/Marca</th>
+              <th className="text-left px-3 py-2.5 font-semibold text-gray-600 w-36">Marca</th>
+              <th className="text-left px-3 py-2.5 font-semibold text-gray-600 w-36">Proveedor</th>
               <th className="text-left px-3 py-2.5 font-semibold text-gray-600">Descripción *</th>
               <th className="text-right px-3 py-2.5 font-semibold text-gray-600 w-40">Cant.</th>
               <th className="text-right px-3 py-2.5 font-semibold text-gray-600 w-44">Precio Venta Unit. (COP)</th>
@@ -391,6 +398,16 @@ export default function CotizacionForm({
                       value={row.referencia}
                       onChange={e => updateRow(row.key, { referencia: e.target.value })}
                       placeholder="SKU / Referencia"
+                      className="w-full min-w-[110px] px-2 py-1.5 border border-gray-200 rounded text-sm focus:outline-none focus:ring-1 focus:ring-emerald-400"
+                    />
+                  </td>
+
+                  {/* Marca */}
+                  <td className="px-3 py-2">
+                    <input
+                      value={row.marca}
+                      onChange={e => updateRow(row.key, { marca: e.target.value })}
+                      placeholder="McIntosh, B&W…"
                       className="w-full min-w-[110px] px-2 py-1.5 border border-gray-200 rounded text-sm focus:outline-none focus:ring-1 focus:ring-emerald-400"
                     />
                   </td>

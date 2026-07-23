@@ -44,12 +44,12 @@ export async function crearOrdenEjecucion(cotizacionId: string, contactoId: stri
   // Leer ítems ordenados explícitamente — evita orden arbitrario de PostgREST
   const { data: cotItems } = await admin
     .from('cotizacion_items')
-    .select('referencia, proveedor, descripcion, cantidad, precio_unitario, descuento, costo_unitario, moneda_costo, trm, orden')
+    .select('referencia, marca, proveedor, descripcion, cantidad, precio_unitario, descuento, costo_unitario, moneda_costo, trm, orden')
     .eq('cotizacion_id', cotizacionId)
     .order('orden', { ascending: true })
 
   const items = (cotItems ?? []) as Array<{
-    referencia: string | null; proveedor: string | null; descripcion: string
+    referencia: string | null; marca: string | null; proveedor: string | null; descripcion: string
     cantidad: number; precio_unitario: number; descuento: number
     costo_unitario: number; moneda_costo: string; trm: number | null
     orden: number
@@ -101,6 +101,7 @@ export async function crearOrdenEjecucion(cotizacionId: string, contactoId: stri
       items.map(it => ({
         orden_ejecucion_id: oe.id,
         proveedor:          it.proveedor  ?? null,
+        marca:              it.marca      ?? null,
         referencia:         it.referencia ?? null,
         descripcion:        it.descripcion,
         cantidad:           it.cantidad,

@@ -9,6 +9,7 @@ interface DefaultValues {
   descripcion: string
   unidad:      string
   referencia:  string
+  marca:       string
   proveedor:   string
   foto_url:    string
   activo?:     boolean
@@ -85,6 +86,15 @@ export default function ProductoForm({ action, defaultValues = {}, mode = 'nuevo
             defaultValue={defaultValues.referencia ?? ''}
             className="w-full px-4 py-2.5 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
             placeholder="SKU-001 (opcional)"
+          />
+        </div>
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1">Marca</label>
+          <input
+            name="marca"
+            defaultValue={defaultValues.marca ?? ''}
+            className="w-full px-4 py-2.5 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
+            placeholder="McIntosh, B&W… (opcional)"
           />
         </div>
         <div>

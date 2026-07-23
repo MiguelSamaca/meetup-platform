@@ -22,7 +22,7 @@ export default async function NuevaCotizacionPage({
       .single(),
     supabase
       .from('productos')
-      .select('id, referencia, proveedor, descripcion, unidad, foto_url')
+      .select('id, referencia, marca, proveedor, descripcion, unidad, foto_url')
       .eq('tenant_id', profile?.tenant_id!)
       .eq('activo', true)
       .order('descripcion'),

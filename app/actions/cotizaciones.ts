@@ -55,6 +55,7 @@ async function sincronizarCatalogo(tenantId: string, items: ItemInput[]) {
     nuevos.map(it => ({
       tenant_id:   tenantId,
       referencia:  it.referencia?.trim() || null,
+      marca:       it.marca?.trim()      || null,
       proveedor:   it.proveedor?.trim()  || null,
       descripcion: it.descripcion.trim(),
       foto_url:    it.foto_url || null,
@@ -68,6 +69,7 @@ async function sincronizarCatalogo(tenantId: string, items: ItemInput[]) {
 
 export interface ItemInput {
   referencia:      string
+  marca:           string
   proveedor:       string
   descripcion:     string
   cantidad:        number
@@ -136,6 +138,7 @@ export async function crearCotizacion(
       .insert(items.map((it, i) => ({
         cotizacion_id:   cot.id,
         referencia:      it.referencia || null,
+        marca:           it.marca      || null,
         proveedor:       it.proveedor  || null,
         descripcion:     it.descripcion,
         cantidad:        it.cantidad,
@@ -218,6 +221,7 @@ export async function editarCotizacion(
       .insert(items.map((it, i) => ({
         cotizacion_id:   cotizacionId,
         referencia:      it.referencia || null,
+        marca:           it.marca      || null,
         proveedor:       it.proveedor  || null,
         descripcion:     it.descripcion,
         cantidad:        it.cantidad,
@@ -278,7 +282,7 @@ export async function duplicarCotizacion(cotizacionId: string, contactoId: strin
     .select(`
       contacto_id, notas, validez_dias, mostrar_descuento,
       cotizacion_items(
-        referencia, proveedor, descripcion, cantidad,
+        referencia, marca, proveedor, descripcion, cantidad,
         precio_unitario, descuento, moneda_costo,
         costo_unitario, trm, orden, foto_url
       )
@@ -319,7 +323,7 @@ export async function duplicarCotizacion(cotizacionId: string, contactoId: strin
 
   // 4. Copiar todos los ítems
   const items = (original.cotizacion_items ?? []) as Array<{
-    referencia: string | null; proveedor: string | null; descripcion: string
+    referencia: string | null; marca: string | null; proveedor: string | null; descripcion: string
     cantidad: number; precio_unitario: number; descuento: number
     moneda_costo: string; costo_unitario: number; trm: number | null
     orden: number; foto_url: string | null
@@ -331,6 +335,7 @@ export async function duplicarCotizacion(cotizacionId: string, contactoId: strin
       .insert(items.map(it => ({
         cotizacion_id:   nueva.id,
         referencia:      it.referencia,
+        marca:           it.marca,
         proveedor:       it.proveedor,
         descripcion:     it.descripcion,
         cantidad:        it.cantidad,

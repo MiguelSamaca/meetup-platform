@@ -24,7 +24,7 @@ export default async function EditarCotizacionPage({
       .from('cotizaciones')
       .select(`
         id, consecutivo, estado, notas, fecha, validez_dias, mostrar_descuento, mostrar_descuento_total,
-        cotizacion_items(id, referencia, proveedor, descripcion, cantidad, precio_unitario,
+        cotizacion_items(id, referencia, marca, proveedor, descripcion, cantidad, precio_unitario,
           descuento, moneda_costo, costo_unitario, trm, foto_url, orden)
       `)
       .eq('id', cotId)
@@ -32,7 +32,7 @@ export default async function EditarCotizacionPage({
       .single(),
     supabase
       .from('productos')
-      .select('id, referencia, proveedor, descripcion, unidad, foto_url')
+      .select('id, referencia, marca, proveedor, descripcion, unidad, foto_url')
       .eq('tenant_id', profile?.tenant_id!)
       .eq('activo', true)
       .order('descripcion'),
@@ -43,7 +43,7 @@ export default async function EditarCotizacionPage({
   const empresaNombre = (contacto.empresas as unknown as { nombre: string } | null)?.nombre
 
   const items = ((cot.cotizacion_items ?? []) as Array<{
-    id: string; referencia: string | null; proveedor: string | null; descripcion: string
+    id: string; referencia: string | null; marca: string | null; proveedor: string | null; descripcion: string
     cantidad: number; precio_unitario: number; descuento: number
     moneda_costo: 'COP' | 'USD'; costo_unitario: number
     trm: number | null; foto_url: string | null; orden: number

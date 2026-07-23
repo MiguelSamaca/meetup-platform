@@ -37,6 +37,7 @@ export default async function EditarProductoPage({ params }: { params: Promise<{
             descripcion: producto.descripcion,
             unidad:      producto.unidad ?? 'und',
             referencia:  producto.referencia ?? '',
+            marca:       (producto as any).marca ?? '',
             proveedor:   producto.proveedor ?? '',
             foto_url:    (producto as any).foto_url ?? '',
             activo:      producto.activo,
