@@ -38,6 +38,28 @@ const claseColor: Record<string, string> = {
   otro:           'bg-gray-100 text-gray-600',
 }
 
+/** Input de dinero: símbolo $ y separador de miles. Guarda solo dígitos. */
+function MoneyInput({
+  value, onChange, placeholder,
+}: {
+  value: string; onChange: (v: string) => void; placeholder?: string
+}) {
+  const display = value ? Number(value).toLocaleString('es-CO') : ''
+  return (
+    <div className="relative">
+      <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-sm pointer-events-none">$</span>
+      <input
+        type="text"
+        inputMode="numeric"
+        value={display}
+        onChange={e => onChange(e.target.value.replace(/[^\d]/g, ''))}
+        placeholder={placeholder}
+        className="w-full pl-7 pr-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+      />
+    </div>
+  )
+}
+
 export default function MovimientosManager({
   cuentas, categorias, proyectos, movimientos,
 }: {
@@ -180,8 +202,7 @@ export default function MovimientosManager({
             {/* Monto */}
             <div>
               <label className="block text-xs text-gray-500 mb-1">Monto</label>
-              <input type="number" value={monto} onChange={e => setMonto(e.target.value)} placeholder="0"
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+              <MoneyInput value={monto} onChange={setMonto} placeholder="0" />
             </div>
             {/* Fecha */}
             <div>
@@ -349,7 +370,7 @@ function MovimientoRow({
             <button type="button" onClick={() => setTipo('salida')} className={`flex-1 py-1.5 text-xs font-medium ${tipo === 'salida' ? 'bg-red-500 text-white' : 'bg-white text-gray-600'}`}>Salida</button>
             <button type="button" onClick={() => setTipo('entrada')} className={`flex-1 py-1.5 text-xs font-medium ${tipo === 'entrada' ? 'bg-emerald-500 text-white' : 'bg-white text-gray-600'}`}>Entrada</button>
           </div>
-          <input type="number" value={monto} onChange={e => setMonto(e.target.value)} placeholder="Monto" className="px-2 py-1.5 border border-gray-300 rounded-lg text-sm" />
+          <MoneyInput value={monto} onChange={setMonto} placeholder="Monto" />
           <input type="date" value={fecha} onChange={e => setFecha(e.target.value)} className="px-2 py-1.5 border border-gray-300 rounded-lg text-sm" />
           <select value={cuentaId} onChange={e => setCuentaId(e.target.value)} className="px-2 py-1.5 border border-gray-300 rounded-lg text-sm">
             <option value="">— Sin cuenta —</option>
