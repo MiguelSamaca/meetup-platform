@@ -46,6 +46,7 @@ export type AuditAccion =
   | 'registrar_pago_proveedor'
   | 'registrar_movimiento'
   | 'eliminar_movimiento'
+  | 'registrar_traspaso'
   | 'crear_cuenta'
 
 interface AuditParams {

@@ -10,6 +10,7 @@ import {
   editarCuenta,
   eliminarCuenta,
   crearCategoria,
+  crearTraspaso,
   type NuevoMovimiento,
 } from '@/app/actions/movimientos'
 
@@ -48,6 +49,7 @@ const claseColor: Record<string, string> = {
   administrativo: 'bg-amber-50 text-amber-700',
   financiero:     'bg-violet-50 text-violet-700',
   proyecto:       'bg-indigo-50 text-indigo-700',
+  traspaso:       'bg-cyan-50 text-cyan-700',
   otro:           'bg-gray-100 text-gray-600',
 }
 
@@ -97,6 +99,20 @@ export default function MovimientosManager({
   const [fClase, setFClase]   = useState('')
   const [fCuenta, setFCuenta] = useState('')
 
+  // Traspaso entre cuentas
+  const [tOrigen, setTOrigen]     = useState(cuentas[0]?.id ?? '')
+  const [tDestino, setTDestino]   = useState(cuentas[1]?.id ?? '')
+  const [tMonto, setTMonto]       = useState('')
+  const [tFecha, setTFecha]       = useState(hoy)
+  function hacerTraspaso() {
+    const m = Number(tMonto)
+    if (!m || m <= 0 || tOrigen === tDestino) return
+    start(async () => {
+      await crearTraspaso({ origenId: tOrigen, destinoId: tDestino, monto: m, fecha: tFecha })
+      setTMonto('')
+    })
+  }
+
   const cuentaNombre = useMemo(() => new Map(cuentas.map(c => [c.id, c.nombre])), [cuentas])
   const catNombre    = useMemo(() => new Map(categorias.map(c => [c.id, c.nombre])), [categorias])
   const proyNombre   = useMemo(() => new Map(proyectos.map(p => [p.id, p.nombre])), [proyectos])
@@ -144,6 +160,7 @@ export default function MovimientosManager({
     let ent = 0, sal = 0
     for (const mv of movimientos) {
       if (!mv.fecha?.startsWith(mesActual)) continue
+      if (mv.clasificacion === 'traspaso') continue   // los traspasos no son ingreso/gasto real
       if (mv.tipo === 'entrada') ent += mv.monto; else sal += mv.monto
     }
     return { ent, sal }
@@ -302,6 +319,48 @@ export default function MovimientosManager({
             </button>
           </div>
         </div>
+      )}
+
+      {/* Traspaso entre cuentas */}
+      {cuentas.length >= 2 && (
+        <details className="bg-white rounded-2xl border border-gray-200 overflow-hidden group">
+          <summary className="px-5 py-3 cursor-pointer list-none flex items-center gap-2 text-sm font-bold text-gray-800">
+            <span className="text-gray-400 text-xs transition-transform group-open:rotate-90">▶</span>
+            ↔ Traspaso entre cuentas
+          </summary>
+          <div className="px-5 pb-5 grid grid-cols-1 sm:grid-cols-5 gap-3 items-end">
+            <div>
+              <label className="block text-xs text-gray-500 mb-1">Desde</label>
+              <select value={tOrigen} onChange={e => setTOrigen(e.target.value)}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm">
+                {cuentas.map(c => <option key={c.id} value={c.id}>{c.nombre}</option>)}
+              </select>
+            </div>
+            <div>
+              <label className="block text-xs text-gray-500 mb-1">Hacia</label>
+              <select value={tDestino} onChange={e => setTDestino(e.target.value)}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm">
+                {cuentas.map(c => <option key={c.id} value={c.id}>{c.nombre}</option>)}
+              </select>
+            </div>
+            <div>
+              <label className="block text-xs text-gray-500 mb-1">Monto</label>
+              <MoneyInput value={tMonto} onChange={setTMonto} placeholder="0" />
+            </div>
+            <div>
+              <label className="block text-xs text-gray-500 mb-1">Fecha</label>
+              <input type="date" value={tFecha} onChange={e => setTFecha(e.target.value)}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm" />
+            </div>
+            <button onClick={hacerTraspaso} disabled={pending || !tMonto || tOrigen === tDestino}
+              className="px-4 py-2 bg-cyan-600 text-white rounded-lg text-sm font-medium hover:bg-cyan-700 disabled:opacity-50 transition-colors">
+              {pending ? 'Registrando…' : 'Registrar traspaso'}
+            </button>
+          </div>
+          {tOrigen === tDestino && (
+            <p className="px-5 pb-4 -mt-2 text-xs text-red-500">Elige dos cuentas distintas.</p>
+          )}
+        </details>
       )}
 
       {/* Filtros + lista */}

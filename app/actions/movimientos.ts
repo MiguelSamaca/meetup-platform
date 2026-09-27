@@ -157,11 +157,68 @@ export async function eliminarMovimiento(id: string) {
   const profile = await requireAdmin()
   const admin   = createAdminClient()
 
-  await admin.from('movimientos').delete().eq('id', id).eq('tenant_id', profile.tenant_id!)
+  // Si es una pata de un traspaso, borrar ambas para no descuadrar las cuentas
+  const { data: mv } = await admin
+    .from('movimientos').select('transferencia_id')
+    .eq('id', id).eq('tenant_id', profile.tenant_id!).maybeSingle()
+
+  if (mv?.transferencia_id) {
+    await admin.from('movimientos').delete()
+      .eq('transferencia_id', mv.transferencia_id).eq('tenant_id', profile.tenant_id!)
+  } else {
+    await admin.from('movimientos').delete().eq('id', id).eq('tenant_id', profile.tenant_id!)
+  }
 
   await logAudit({
     tenantId: profile.tenant_id, userId: profile.id, userNombre: profile.nombre,
     accion: 'eliminar_movimiento', entidad: 'movimiento', entidadId: id,
+  })
+
+  revalidatePath('/admin/finanzas/movimientos')
+  revalidatePath('/admin/finanzas')
+  revalidatePath('/admin/finanzas/flujo')
+}
+
+/* ─── Traspaso entre cuentas ──────────────────────────────── */
+export async function crearTraspaso(input: {
+  origenId:  string
+  destinoId: string
+  monto:     number
+  fecha:     string
+  concepto?: string
+}) {
+  const profile = await requireAdmin()
+  const admin   = createAdminClient()
+
+  if (!input.monto || input.monto <= 0) throw new Error('El monto debe ser mayor a 0')
+  if (!input.origenId || !input.destinoId) throw new Error('Selecciona ambas cuentas')
+  if (input.origenId === input.destinoId) throw new Error('Las cuentas deben ser distintas')
+
+  const { data: ctas } = await admin
+    .from('cuentas').select('id, nombre')
+    .eq('tenant_id', profile.tenant_id!).in('id', [input.origenId, input.destinoId])
+  const nombre = new Map((ctas ?? []).map(c => [c.id, c.nombre]))
+
+  const transferencia_id = crypto.randomUUID()
+  const fecha = input.fecha || new Date().toISOString().slice(0, 10)
+  const nota  = input.concepto?.trim()
+  const base  = {
+    tenant_id: profile.tenant_id, fecha, clasificacion: 'traspaso',
+    transferencia_id, recurrente: false, created_by: profile.id,
+  }
+
+  const { error } = await admin.from('movimientos').insert([
+    { ...base, cuenta_id: input.origenId,  tipo: 'salida',  monto: input.monto,
+      concepto: nota || `Traspaso a ${nombre.get(input.destinoId) ?? 'cuenta'}` },
+    { ...base, cuenta_id: input.destinoId, tipo: 'entrada', monto: input.monto,
+      concepto: nota || `Traspaso de ${nombre.get(input.origenId) ?? 'cuenta'}` },
+  ])
+  if (error) throw new Error(error.message)
+
+  await logAudit({
+    tenantId: profile.tenant_id, userId: profile.id, userNombre: profile.nombre,
+    accion: 'registrar_traspaso', entidad: 'movimiento',
+    detalles: { de: nombre.get(input.origenId), a: nombre.get(input.destinoId), monto: input.monto },
   })
 
   revalidatePath('/admin/finanzas/movimientos')
