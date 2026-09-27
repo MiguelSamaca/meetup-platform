@@ -39,6 +39,7 @@ function parseAsociado(v: string) {
 
 const CLASES = [
   { v: 'operacional',    l: 'Operacional' },
+  { v: 'ventas',         l: 'Ventas' },
   { v: 'administrativo', l: 'Administrativo' },
   { v: 'financiero',     l: 'Financiero' },
   { v: 'proyecto',       l: 'Proyecto' },
@@ -46,6 +47,7 @@ const CLASES = [
 ]
 const claseColor: Record<string, string> = {
   operacional:    'bg-blue-50 text-blue-700',
+  ventas:         'bg-emerald-50 text-emerald-700',
   administrativo: 'bg-amber-50 text-amber-700',
   financiero:     'bg-violet-50 text-violet-700',
   proyecto:       'bg-indigo-50 text-indigo-700',
