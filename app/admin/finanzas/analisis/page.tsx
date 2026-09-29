@@ -53,14 +53,14 @@ export default async function AnalisisPage({
   // Ítems de esas órdenes (costos)
   const { data: items } = oeIds.length > 0
     ? await admin.from('oe_items')
-        .select('orden_ejecucion_id, cantidad, costo_unitario, moneda_costo, trm')
+        .select('id, orden_ejecucion_id, descripcion, referencia, cantidad, costo_unitario, moneda_costo, trm, orden')
         .in('orden_ejecucion_id', oeIds)
     : { data: [] }
 
   // Movimientos del mes (gastos operativos)
   const { data: movs } = await admin
     .from('movimientos')
-    .select('tipo, monto, clasificacion, categoria_id, fecha')
+    .select('id, tipo, monto, concepto, clasificacion, categoria_id, fecha')
     .eq('tenant_id', tid)
     .gte('fecha', inicio).lt('fecha', inicioNext)
 
@@ -111,6 +111,20 @@ export default async function AnalisisPage({
 
   const catsOrden = [...gastosPorCat.entries()].sort((a, b) => b[1] - a[1])
 
+  // Detalle: gastos del mes por fecha, y costos agrupados por orden
+  const gastosDetalle = [...gastosOp].sort((a, b) => (a.fecha ?? '').localeCompare(b.fecha ?? ''))
+  const costosPorOrden = (oes ?? []).map(o => ({
+    oe: o,
+    items: (items ?? [])
+      .filter(it => it.orden_ejecucion_id === o.id)
+      .sort((a, b) => (a.orden ?? 0) - (b.orden ?? 0))
+      .map(it => {
+        const cu    = it.costo_unitario ?? 0
+        const cuCOP = it.moneda_costo === 'USD' ? cu * (it.trm ?? 4000) : cu
+        return { ...it, cuCOP, total: Math.round((it.cantidad ?? 0) * cuCOP) }
+      }),
+  })).filter(g => g.items.length > 0)
+
   return (
     <div className="space-y-6">
       {/* Header + navegación de mes */}
@@ -131,22 +145,33 @@ export default async function AnalisisPage({
       {/* KPIs */}
       <div className="grid grid-cols-2 lg:grid-cols-5 gap-3">
         {[
-          { label: 'Ventas (sin IVA)', value: ventas,        color: 'text-gray-900',   bg: 'bg-white' },
-          { label: 'Costos',           value: costos,        color: 'text-rose-600',   bg: 'bg-white' },
+          { label: 'Ventas (sin IVA)', value: ventas,        color: 'text-gray-900',   bg: 'bg-white', href: '#ventas' },
+          { label: 'Costos',           value: costos,        color: 'text-rose-600',   bg: 'bg-white', href: '#costos' },
           { label: 'Utilidad bruta',   value: utilidadBruta, color: utilidadBruta >= 0 ? 'text-emerald-700' : 'text-red-600', bg: 'bg-emerald-50', pct: margenBruto },
-          { label: 'Gastos operativos',value: totalGastosOp, color: 'text-amber-600',  bg: 'bg-white' },
+          { label: 'Gastos operativos',value: totalGastosOp, color: 'text-amber-600',  bg: 'bg-white', href: '#gastos' },
           { label: 'Utilidad neta',    value: utilidadNeta,  color: utilidadNeta >= 0 ? 'text-emerald-700' : 'text-red-600', bg: utilidadNeta >= 0 ? 'bg-emerald-50' : 'bg-red-50', pct: margenNeto, strong: true },
-        ].map(k => (
-          <div key={k.label} className={`${k.bg} rounded-xl border border-gray-200 p-4`}>
-            <p className="text-[11px] text-gray-500 uppercase tracking-wide font-medium">{k.label}</p>
-            <p className={`${k.strong ? 'text-2xl' : 'text-xl'} font-bold mt-1 ${k.color}`}>${fmt(k.value)}</p>
-            {k.pct != null && (
-              <p className={`text-xs mt-0.5 font-medium ${k.pct >= 20 ? 'text-emerald-600' : k.pct >= 0 ? 'text-amber-600' : 'text-red-500'}`}>
-                margen {k.pct.toFixed(1)}%
-              </p>
-            )}
-          </div>
-        ))}
+        ].map(k => {
+          const contenido = (
+            <>
+              <p className="text-[11px] text-gray-500 uppercase tracking-wide font-medium">{k.label}</p>
+              <p className={`${k.strong ? 'text-2xl' : 'text-xl'} font-bold mt-1 ${k.color}`}>${fmt(k.value)}</p>
+              {k.pct != null && (
+                <p className={`text-xs mt-0.5 font-medium ${k.pct >= 20 ? 'text-emerald-600' : k.pct >= 0 ? 'text-amber-600' : 'text-red-500'}`}>
+                  margen {k.pct.toFixed(1)}%
+                </p>
+              )}
+              {k.href && <p className="text-[11px] text-blue-500 mt-1">Ver detalle ↓</p>}
+            </>
+          )
+          return k.href ? (
+            <a key={k.label} href={k.href}
+              className={`${k.bg} rounded-xl border border-gray-200 p-4 hover:border-blue-300 hover:shadow-sm transition-all`}>
+              {contenido}
+            </a>
+          ) : (
+            <div key={k.label} className={`${k.bg} rounded-xl border border-gray-200 p-4`}>{contenido}</div>
+          )
+        })}
       </div>
 
       {/* Estado de resultados (cascada) */}
@@ -166,31 +191,99 @@ export default async function AnalisisPage({
         )}
       </div>
 
-      {/* Desglose de gastos operativos */}
-      {gastosOp.length > 0 && (
-        <div className="bg-white rounded-2xl border border-gray-200 p-6">
-          <h2 className="text-sm font-bold text-gray-800 mb-4">Gastos operativos por categoría</h2>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mb-5">
-            {GASTOS_OP.map(cl => (
-              <div key={cl} className="border border-gray-100 rounded-lg p-3">
-                <p className="text-xs text-gray-400">{CLASE_LABEL[cl]}</p>
-                <p className="text-lg font-bold text-gray-800">${fmt(Math.round(gastosPorClase.get(cl) ?? 0))}</p>
-              </div>
-            ))}
-          </div>
-          <div className="divide-y divide-gray-50">
-            {catsOrden.map(([cat, monto]) => (
-              <div key={cat} className="flex items-center justify-between py-2 text-sm">
-                <span className="text-gray-600">{cat}</span>
-                <span className="font-medium text-gray-800">${fmt(Math.round(monto))}</span>
-              </div>
-            ))}
-          </div>
+      {/* Gastos operativos: resumen + detalle */}
+      <div id="gastos" className="bg-white rounded-2xl border border-gray-200 overflow-hidden scroll-mt-20">
+        <div className="px-5 py-3 border-b border-gray-100 flex items-center justify-between">
+          <h2 className="text-sm font-bold text-gray-800">Gastos operativos ({gastosOp.length})</h2>
+          <span className="text-sm font-bold text-amber-600">${fmt(totalGastosOp)}</span>
         </div>
-      )}
+        {gastosOp.length === 0 ? (
+          <p className="px-5 py-8 text-center text-sm text-gray-400">No hay gastos operativos en {mesLabel(mes)}.</p>
+        ) : (
+          <>
+            <div className="px-5 pt-4 grid grid-cols-1 md:grid-cols-3 gap-3">
+              {GASTOS_OP.map(cl => (
+                <div key={cl} className="border border-gray-100 rounded-lg p-3">
+                  <p className="text-xs text-gray-400">{CLASE_LABEL[cl]}</p>
+                  <p className="text-lg font-bold text-gray-800">${fmt(Math.round(gastosPorClase.get(cl) ?? 0))}</p>
+                </div>
+              ))}
+            </div>
+            <div className="px-5 pt-4">
+              <p className="text-xs font-semibold text-gray-500 uppercase mb-1">Por categoría</p>
+              <div className="divide-y divide-gray-50">
+                {catsOrden.map(([cat, monto]) => (
+                  <div key={cat} className="flex items-center justify-between py-1.5 text-sm">
+                    <span className="text-gray-600">{cat}</span>
+                    <span className="font-medium text-gray-800">${fmt(Math.round(monto))}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+            <div className="px-5 pt-4 pb-2">
+              <p className="text-xs font-semibold text-gray-500 uppercase mb-1">Todos los gastos del mes</p>
+            </div>
+            <div className="divide-y divide-gray-50 border-t border-gray-100">
+              {gastosDetalle.map(g => (
+                <div key={g.id} className="flex items-center gap-3 px-5 py-2.5 text-sm">
+                  <span className="text-xs text-gray-400 w-20 shrink-0">
+                    {new Date(g.fecha + 'T12:00:00').toLocaleDateString('es-CO', { day: '2-digit', month: 'short' })}
+                  </span>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-gray-800 truncate">{g.concepto || 'Sin concepto'}</p>
+                    <p className="text-xs text-gray-400">
+                      {CLASE_LABEL[g.clasificacion]}
+                      {g.categoria_id && ` · ${catNombre.get(g.categoria_id) ?? ''}`}
+                    </p>
+                  </div>
+                  <span className="font-medium text-red-600 shrink-0">−${fmt(Math.round(g.monto))}</span>
+                </div>
+              ))}
+            </div>
+          </>
+        )}
+      </div>
+
+      {/* Costos: equipos de cada orden */}
+      <div id="costos" className="bg-white rounded-2xl border border-gray-200 overflow-hidden scroll-mt-20">
+        <div className="px-5 py-3 border-b border-gray-100 flex items-center justify-between">
+          <h2 className="text-sm font-bold text-gray-800">Costos de equipos</h2>
+          <span className="text-sm font-bold text-rose-600">${fmt(costos)}</span>
+        </div>
+        {costosPorOrden.length === 0 ? (
+          <p className="px-5 py-8 text-center text-sm text-gray-400">No hay costos en {mesLabel(mes)}.</p>
+        ) : (
+          <div className="divide-y divide-gray-100">
+            {costosPorOrden.map(({ oe, items: its }) => (
+              <div key={oe.id}>
+                <Link href={`/admin/ordenes/${oe.id}`}
+                  className="flex items-center justify-between px-5 py-2.5 bg-gray-50 hover:bg-gray-100">
+                  <span className="text-sm font-semibold text-gray-700">
+                    {oe.consecutivo} · {nombreContacto.get(oe.contacto_id ?? '') ?? 'Cliente'}
+                  </span>
+                  <span className="text-sm font-bold text-rose-600">${fmt(Math.round(costoPorOE.get(oe.id) ?? 0))}</span>
+                </Link>
+                {its.map(it => (
+                  <div key={it.id} className="flex items-center gap-3 px-5 py-2 text-sm">
+                    <div className="flex-1 min-w-0">
+                      <p className="text-gray-800 truncate">{it.descripcion}</p>
+                      <p className="text-xs text-gray-400">
+                        {it.referencia && `${it.referencia} · `}
+                        {it.cantidad} × ${fmt(Math.round(it.cuCOP))}
+                        {it.moneda_costo === 'USD' && ` (USD ${fmt(it.costo_unitario ?? 0)} · TRM ${fmt(it.trm ?? 4000)})`}
+                      </p>
+                    </div>
+                    <span className="font-medium text-gray-700 shrink-0">${fmt(it.total)}</span>
+                  </div>
+                ))}
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
 
       {/* Ventas del mes */}
-      <div className="bg-white rounded-2xl border border-gray-200 overflow-hidden">
+      <div id="ventas" className="bg-white rounded-2xl border border-gray-200 overflow-hidden scroll-mt-20">
         <div className="px-5 py-3 border-b border-gray-100">
           <h2 className="text-sm font-bold text-gray-800">Ventas del mes ({oes?.length ?? 0})</h2>
         </div>
