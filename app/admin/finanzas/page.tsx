@@ -276,9 +276,28 @@ export default async function FinanzasDashboardPage({
         </div>
       </div>
 
+      {/* Análisis de ventas del mes */}
+      <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-4 mb-4">
+        <div className="flex flex-wrap items-center justify-between gap-4">
+          <div>
+            <p className="text-xs font-semibold text-emerald-700 uppercase tracking-wide mb-1">
+              📈 Análisis de ventas del mes
+            </p>
+            <p className="text-xs text-emerald-700">
+              Ventas, costos, utilidad bruta, gastos operativos y utilidad neta.
+            </p>
+          </div>
+          <Link href="/admin/finanzas/analisis"
+            className="text-xs bg-emerald-600 text-white px-3 py-2 rounded-lg hover:bg-emerald-700 transition-colors font-semibold whitespace-nowrap">
+            Ver análisis →
+          </Link>
+        </div>
+      </div>
+
       {/* Accesos rápidos a submódulos */}
-      <div className="grid grid-cols-2 lg:grid-cols-5 gap-3 mb-8">
+      <div className="grid grid-cols-2 lg:grid-cols-6 gap-3 mb-8">
         {[
+          { href: '/admin/finanzas/analisis',      icon: '📈', label: 'Análisis ventas', desc: 'Utilidad del mes',       color: 'border-emerald-200 hover:bg-emerald-50' },
           { href: '/admin/finanzas/cobrar',       icon: '📥', label: 'Por cobrar',     desc: 'Pagos de clientes',      color: 'border-emerald-200 hover:bg-emerald-50' },
           { href: '/admin/finanzas/pagar',         icon: '📤', label: 'Por pagar',      desc: 'Pagos a proveedores',    color: 'border-blue-200 hover:bg-blue-50'     },
           { href: '/admin/finanzas/rentabilidad',  icon: '📊', label: 'Rentabilidad',   desc: 'Margen por proyecto',    color: 'border-purple-200 hover:bg-purple-50' },
